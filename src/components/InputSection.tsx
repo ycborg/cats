@@ -1,7 +1,7 @@
 import type { LucideIcon } from 'lucide-react';
 import { Briefcase, Check, Eraser, LoaderCircle, ScanSearch, UserRound } from 'lucide-react';
 import type { CSSProperties, KeyboardEvent, PointerEvent, RefObject } from 'react';
-import { useRef, useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import { countWords } from '../utils/textProcessing';
 import type { SampleId } from '../utils/sampleData';
 import { buttonStyles } from './buttonStyles';
@@ -31,9 +31,37 @@ interface TextFieldProps {
   onChange: (value: string) => void;
 }
 
+/** Altura mínima do campo que cresce com o texto (celular/telas baixas). */
+const AUTO_GROW_MIN_HEIGHT = 180;
+
+/**
+ * Fora da coluna fixa (celular, tablet, telas baixas), o campo cresce com o conteúdo e não tem
+ * rolagem interna: no toque, o dedo sempre rola a página, nunca fica "preso" dentro do campo.
+ */
+function useAutoGrow(ref: RefObject<HTMLTextAreaElement | null>, value: string, enabled: boolean) {
+  useLayoutEffect(() => {
+    const element = ref.current;
+    if (!element) return;
+    if (!enabled) {
+      element.style.height = '';
+      return;
+    }
+    const fit = () => {
+      element.style.height = 'auto';
+      element.style.height = `${Math.max(AUTO_GROW_MIN_HEIGHT, element.scrollHeight + 2)}px`;
+    };
+    fit();
+    // A largura muda ao girar o celular, e com ela a quebra de linhas.
+    window.addEventListener('resize', fit);
+    return () => window.removeEventListener('resize', fit);
+  }, [ref, value, enabled]);
+}
+
 function TextField({ id, label, description, placeholder, icon: Icon, value, highlight, fitted, style, onChange }: TextFieldProps) {
   const chars = value.length;
   const words = countWords(value);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  useAutoGrow(textareaRef, value, !fitted);
 
   return (
     <div
@@ -54,15 +82,20 @@ function TextField({ id, label, description, placeholder, icon: Icon, value, hig
       <p id={`${id}-hint`} className="mt-1 text-xs text-muted">
         {description}
       </p>
+      {/*
+        Fonte de 16px no celular: abaixo disso o Safari do iPhone dá zoom automático ao tocar no
+        campo e a página fica ampliada, com rolagem horizontal.
+      */}
       <textarea
+        ref={textareaRef}
         id={id}
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
         aria-describedby={`${id}-hint`}
         spellCheck={false}
-        className={`mt-3 block w-full rounded-xl border border-line bg-canvas px-4 py-3 text-sm leading-relaxed text-body transition duration-200 placeholder:text-muted hover:border-slate-300 focus:border-ink focus:bg-white focus:ring-4 focus:ring-ink/10 focus:outline-none ${
-          fitted ? 'min-h-0 flex-1 resize-none' : 'min-h-[240px] resize-y'
+        className={`mt-3 block w-full rounded-xl border border-line bg-canvas px-4 py-3 text-base leading-relaxed text-body transition-colors duration-200 placeholder:text-muted hover:border-slate-300 focus:border-ink focus:bg-white focus:ring-4 focus:ring-ink/10 focus:outline-none sm:text-sm ${
+          fitted ? 'min-h-0 flex-1 resize-none' : 'resize-none overflow-hidden'
         } ${highlight ? 'animate-field-flash' : ''}`}
       />
     </div>
