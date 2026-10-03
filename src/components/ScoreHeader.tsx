@@ -82,12 +82,16 @@ export function getCollapseDistance(root: HTMLElement): number {
  * (no cabeçalho fixo `root`) a cada quadro, sem re-render do React.
  * Deve ser chamado no componente que renderiza `root`: o efeito de um filho roda antes
  * de a ref do pai ser conectada.
+ *
+ * Com `enabled = false` (celular), o card fica sempre completo: só mede as alturas, sem
+ * acompanhar a rolagem (recalcular o layout a cada quadro engasga a rolagem por toque).
  */
 export function useScrollCollapse(
   sentinelRef: RefObject<HTMLElement | null>,
   rootRef: RefObject<HTMLElement | null>,
   fullRef: RefObject<HTMLElement | null>,
   compactRef: RefObject<HTMLElement | null>,
+  enabled = true,
 ) {
   useLayoutEffect(() => {
     const root = rootRef.current;
@@ -99,7 +103,7 @@ export function useScrollCollapse(
     let lastCollapsed: boolean | null = null;
     const update = () => {
       const sentinelTop = sentinelRef.current?.getBoundingClientRect().top ?? 0;
-      const progress = Math.min(1, Math.max(0, -sentinelTop / distance));
+      const progress = enabled ? Math.min(1, Math.max(0, -sentinelTop / distance)) : 0;
       root.style.setProperty('--collapse', progress.toFixed(4));
 
       // Só a camada predominante fica acessível/clicável.
@@ -132,15 +136,17 @@ export function useScrollCollapse(
     const observer = new ResizeObserver(measure);
     observer.observe(full);
     observer.observe(compact);
-    window.addEventListener('scroll', schedule, { passive: true });
-    window.addEventListener('resize', schedule);
+    if (enabled) {
+      window.addEventListener('scroll', schedule, { passive: true });
+      window.addEventListener('resize', schedule);
+    }
     return () => {
       cancelAnimationFrame(frame);
       observer.disconnect();
       window.removeEventListener('scroll', schedule);
       window.removeEventListener('resize', schedule);
     };
-  }, [sentinelRef, rootRef, fullRef, compactRef]);
+  }, [sentinelRef, rootRef, fullRef, compactRef, enabled]);
 }
 
 interface ScoreHeaderProps {

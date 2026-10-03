@@ -60,6 +60,14 @@
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
   }
+  /*
+    Nenhum elemento pode criar rolagem horizontal (péssimo no celular). "clip" em vez de "hidden":
+    não cria um contêiner de rolagem, então os elementos sticky continuam funcionando.
+  */
+  html,
+  body {
+    overflow-x: clip;
+  }
   body {
     background-color: var(--color-canvas);
     color: var(--color-body);
