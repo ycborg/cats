@@ -72,21 +72,21 @@
   </g>
 
   <!-- Mensagem -->
-  <text x="640" y="336" text-anchor="middle" class="inter" font-size="40" font-weight="700" fill="#0F141E">
+  <text x="640" y="328" text-anchor="middle" class="inter" font-size="31" font-weight="700" fill="#0F141E">
     Otimizador ético de currículos para filtros ATS
   </text>
-  <text x="640" y="386" text-anchor="middle" class="inter" font-size="23" font-weight="500" fill="#64748B">
+  <text x="640" y="370" text-anchor="middle" class="inter" font-size="19" font-weight="500" fill="#64748B">
     Score composto · 15 áreas profissionais · 100% no navegador
   </text>
 
   <!-- Faixa inferior (como o rodapé do site) -->
   <rect y="470" width="1280" height="170" fill="#0F141E" />
-  <text x="80" y="547" class="inter" font-size="27" font-weight="600" fill="#FFFFFF">ycborg.github.io/cats</text>
-  <text x="80" y="585" class="inter" font-size="19" font-weight="400" fill="#94A3B8">
+  <text x="80" y="550" class="inter" font-size="22" font-weight="600" fill="#FFFFFF">ycborg.github.io/cats</text>
+  <text x="80" y="581" class="inter" font-size="16" font-weight="400" fill="#94A3B8">
     Feito para quem cai em pé no mercado de trabalho.
   </text>
-  <text x="1200" y="570" text-anchor="end" class="inter" font-size="19" font-weight="400" fill="#94A3B8">
-    desenvolvido por <tspan class="mono" font-size="30" fill="#FFFFFF" dx="6">ycborg</tspan>
+  <text x="1200" y="570" text-anchor="end" class="inter" font-size="16" font-weight="400" fill="#94A3B8">
+    desenvolvido por <tspan class="mono" font-size="25" fill="#FFFFFF" dx="5">ycborg</tspan>
   </text>
 
   <!-- Novelo e gatinho deitados sobre a borda da faixa (linha de base em y=470) -->
