@@ -1,3 +1,13 @@
+<p align="center">
+  <a href="https://ycborg.github.io/cats/">
+    <img src="docs/banner.png" alt="CATS — Otimizador ético de currículos para filtros ATS" width="100%" />
+  </a>
+</p>
+
+<p align="center">
+  <a href="https://ycborg.github.io/cats/"><strong>Acessar o CATS →</strong></a>
+</p>
+
 # CATS — Otimizador Ético de Currículos para ATS
 
 O CATS analisa a compatibilidade do seu currículo com uma vaga, do jeito que os filtros ATS (Gupy, Workday, Greenhouse, Taleo) fazem. Ele mostra o que está forte, o que falta e gera uma versão do currículo no formato que esses sistemas leem melhor.
