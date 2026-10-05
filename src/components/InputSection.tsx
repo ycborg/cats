@@ -27,16 +27,19 @@ interface TextFieldProps {
   highlight: boolean;
   /** Modo coluna fixa: o campo preenche o espaço recebido em vez de ter altura própria. */
   fitted: boolean;
+  /** Uma coluna (celular/tablet): o campo cresce com o texto, sem rolagem interna. */
+  autoGrow: boolean;
   style?: CSSProperties;
   onChange: (value: string) => void;
 }
 
-/** Altura mínima do campo que cresce com o texto (celular/telas baixas). */
+/** Altura mínima do campo que cresce com o texto (layout de uma coluna). */
 const AUTO_GROW_MIN_HEIGHT = 180;
 
 /**
- * Fora da coluna fixa (celular, tablet, telas baixas), o campo cresce com o conteúdo e não tem
- * rolagem interna: no toque, o dedo sempre rola a página, nunca fica "preso" dentro do campo.
+ * Em uma coluna (celular e tablet), o campo cresce com o conteúdo e não tem rolagem interna: no
+ * toque, o dedo sempre rola a página, nunca fica "preso" dentro do campo. Em duas colunas o campo
+ * mantém altura fixa e barra de rolagem, mesmo em telas baixas sem a coluna fixa.
  */
 function useAutoGrow(ref: RefObject<HTMLTextAreaElement | null>, value: string, enabled: boolean) {
   useLayoutEffect(() => {
@@ -57,11 +60,23 @@ function useAutoGrow(ref: RefObject<HTMLTextAreaElement | null>, value: string, 
   }, [ref, value, enabled]);
 }
 
-function TextField({ id, label, description, placeholder, icon: Icon, value, highlight, fitted, style, onChange }: TextFieldProps) {
+function TextField({
+  id,
+  label,
+  description,
+  placeholder,
+  icon: Icon,
+  value,
+  highlight,
+  fitted,
+  autoGrow,
+  style,
+  onChange,
+}: TextFieldProps) {
   const chars = value.length;
   const words = countWords(value);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  useAutoGrow(textareaRef, value, !fitted);
+  useAutoGrow(textareaRef, value, autoGrow && !fitted);
 
   return (
     <div
@@ -95,7 +110,7 @@ function TextField({ id, label, description, placeholder, icon: Icon, value, hig
         aria-describedby={`${id}-hint`}
         spellCheck={false}
         className={`mt-3 block w-full rounded-xl border border-line bg-canvas px-4 py-3 text-base leading-relaxed text-body transition-colors duration-200 placeholder:text-muted hover:border-slate-300 focus:border-ink focus:bg-white focus:ring-4 focus:ring-ink/10 focus:outline-none sm:text-sm ${
-          fitted ? 'min-h-0 flex-1 resize-none' : 'resize-none overflow-hidden'
+          fitted ? 'min-h-0 flex-1 resize-none' : autoGrow ? 'resize-none overflow-hidden' : 'h-[260px] resize-y'
         } ${highlight ? 'animate-field-flash' : ''}`}
       />
     </div>
@@ -176,6 +191,8 @@ interface InputSectionProps {
   analysisDone: boolean;
   /** Coluna fixa com a altura da tela: campos dividem o espaço e se redimensionam juntos. */
   fitted: boolean;
+  /** Uma coluna: campos crescem com o texto. Duas colunas: campos com barra de rolagem. */
+  autoGrow: boolean;
   onJobChange: (value: string) => void;
   onResumeChange: (value: string) => void;
   onLoadSample: (id: SampleId) => void;
@@ -190,6 +207,7 @@ export function InputSection({
   sampleLoaded,
   analysisDone,
   fitted,
+  autoGrow,
   onJobChange,
   onResumeChange,
   onLoadSample,
@@ -227,6 +245,7 @@ export function InputSection({
           value={jobText}
           highlight={sampleLoaded}
           fitted={fitted}
+          autoGrow={autoGrow}
           style={fitted ? { flex: `${split} 1 0px` } : undefined}
           onChange={onJobChange}
         />
@@ -242,6 +261,7 @@ export function InputSection({
           value={resumeText}
           highlight={sampleLoaded}
           fitted={fitted}
+          autoGrow={autoGrow}
           style={fitted ? { flex: `${1 - split} 1 0px` } : undefined}
           onChange={onResumeChange}
         />
