@@ -5,7 +5,7 @@ import { Header } from './components/Header';
 import { InputSection } from './components/InputSection';
 import { ResultsPanel } from './components/ResultsPanel';
 import { useToast } from './components/Toast';
-import { STICKY_LAYOUT_QUERY, useMediaQuery } from './hooks/useMediaQuery';
+import { STICKY_LAYOUT_QUERY, TWO_COLUMN_QUERY, useMediaQuery } from './hooks/useMediaQuery';
 import { useTransientFlag } from './hooks/useTransientFlag';
 import { useViewportFitHeight } from './hooks/useViewportFitHeight';
 import type { AnalysisResult, UiStatus } from './types/ats';
@@ -30,6 +30,7 @@ export default function App() {
   const showToast = useToast();
   const inputColumnRef = useRef<HTMLDivElement>(null);
   const isStickyLayout = useMediaQuery(STICKY_LAYOUT_QUERY);
+  const isTwoColumns = useMediaQuery(TWO_COLUMN_QUERY);
   const inputColumnHeight = useViewportFitHeight(inputColumnRef, isStickyLayout, {
     stickyTop: STICKY_TOP_PX,
     bottomGap: STICKY_TOP_PX,
@@ -97,6 +98,7 @@ export default function App() {
               sampleLoaded={sampleLoaded}
               analysisDone={analysisDone}
               fitted={isStickyLayout}
+              autoGrow={!isTwoColumns}
               onJobChange={setJobText}
               onResumeChange={setResumeText}
               onLoadSample={handleLoadSample}

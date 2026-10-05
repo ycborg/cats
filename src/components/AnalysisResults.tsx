@@ -11,10 +11,7 @@ import { KeywordBadges } from './KeywordBadges';
 import { MissingKeywordGuide } from './MissingKeywordGuide';
 import { ResumePreview } from './ResumePreview';
 import { ScoreHeader, getCollapseDistance, progressVar, useScrollCollapse } from './ScoreHeader';
-import { useMediaQuery } from '../hooks/useMediaQuery';
-
-/** O score fixo que encolhe só é usado no desktop (lado a lado com a coluna de entrada). */
-const COLLAPSIBLE_SCORE_QUERY = '(min-width: 1024px)';
+import { TWO_COLUMN_QUERY, useMediaQuery } from '../hooks/useMediaQuery';
 
 type TabId = 'keywords' | 'criteria' | 'resume';
 
@@ -47,7 +44,7 @@ export function AnalysisResults({ result, runId }: AnalysisResultsProps) {
   const tabBarRef = useRef<HTMLDivElement>(null);
   const panelsRef = useRef<HTMLDivElement>(null);
   // Desktop: score fixo que encolhe ao rolar. Celular: score rola normalmente; só as abas ficam fixas.
-  const collapsible = useMediaQuery(COLLAPSIBLE_SCORE_QUERY);
+  const collapsible = useMediaQuery(TWO_COLUMN_QUERY);
   useScrollCollapse(sentinelRef, stickyRef, scoreFullRef, scoreCompactRef, collapsible);
   const tabRefs = useRef<Partial<Record<TabId, HTMLButtonElement | null>>>({});
   const [activeTab, setActiveTab] = useState<TabId>('keywords');

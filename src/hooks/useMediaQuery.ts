@@ -17,5 +17,8 @@ export function useMediaQuery(query: string): boolean {
   );
 }
 
+/** Layout em duas colunas (entrada | diagnóstico). Abaixo disso, tudo fica empilhado em uma coluna. */
+export const TWO_COLUMN_QUERY = '(min-width: 1024px)';
+
 /** Desktop com altura suficiente para a coluna de entrada ficar fixa sem ficar espremida. */
 export const STICKY_LAYOUT_QUERY = '(min-width: 1024px) and (min-height: 700px)';
