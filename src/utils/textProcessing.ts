@@ -90,8 +90,17 @@ export const isStopword = (token: string): boolean => STOPWORDS.has(stripAccents
 export const isNoise = (token: string): boolean =>
   NOISE_WORDS.has(stripAccents(token)) || NOISE_WORDS.has(canonicalToken(token));
 
-/** Heurística para descartar verbos no infinitivo, gerúndios e advérbios ("desenvolver", "atuando"). */
+/**
+ * Heurística para descartar verbos e advérbios, que não são competências: infinitivos ("atuar",
+ * "desenvolver"), gerúndios ("atuando"), advérbios em -mente ("rapidamente") e em -ly ("closely").
+ * Termos técnicos com essas terminações ("Docker", "Angular") vêm do dicionário e não passam por aqui.
+ */
 export function isVerbLike(token: string): boolean {
   const plain = stripAccents(token);
-  return /^[a-z]{4,}(ar|er|ir)$/.test(plain) || /^[a-z]{3,}(ando|endo|indo)$/.test(plain) || /^[a-z]{3,}mente$/.test(plain);
+  return (
+    /^[a-z]{3,}(ar|er|ir)$/.test(plain) ||
+    /^[a-z]{3,}(ando|endo|indo)$/.test(plain) ||
+    /^[a-z]{3,}mente$/.test(plain) ||
+    /^[a-z]{4,}ly$/.test(plain)
+  );
 }
