@@ -17,6 +17,11 @@ import {
 } from './textProcessing';
 
 const MAX_KEYWORDS = 30;
+/**
+ * Termos genéricos (fora do dicionário) precisam de pelo menos 4 letras: palavras mais curtas quase
+ * sempre são conectivos ("não", "sim"). Siglas técnicas curtas (SQL, AWS) vêm do dicionário.
+ */
+const MIN_GENERIC_LENGTH = 4;
 /** Expressões do dicionário com mais palavras que isso são ignoradas (evita custo desnecessário). */
 const MAX_PHRASE_LIMIT = 6;
 
@@ -110,7 +115,12 @@ function isRoleWord(token: string): boolean {
 
 function isEligibleGeneral(token: string, key: string): boolean {
   return (
-    key.length >= 3 && !/\d/.test(key) && !isStopword(token) && !isNoise(token) && !isVerbLike(token) && !isRoleWord(token)
+    key.length >= MIN_GENERIC_LENGTH &&
+    !/\d/.test(key) &&
+    !isStopword(token) &&
+    !isNoise(token) &&
+    !isVerbLike(token) &&
+    !isRoleWord(token)
   );
 }
 
