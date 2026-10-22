@@ -12,6 +12,10 @@ const OPTIONS: Array<{ format: ExportFormat; label: string; hint: string; icon: 
   { format: 'txt', label: 'Texto (.txt)', hint: 'Para colar em formulários de vaga', icon: FileText },
 ];
 
+/** Largura do menu (w-72) e margem mínima até a borda da tela, em px. */
+const MENU_WIDTH = 288;
+const VIEWPORT_MARGIN = 16;
+
 interface ExportMenuProps {
   busy: boolean;
   onExport: (format: ExportFormat) => void;
@@ -21,9 +25,18 @@ interface ExportMenuProps {
 export function ExportMenu({ busy, onExport }: ExportMenuProps) {
   const menuId = useId();
   const [open, setOpen] = useState(false);
+  // Abre para a esquerda (alinhado à direita do botão) quando há espaço; senão, para a direita.
+  // No celular o botão quebra para o início da linha e o menu sumiria pela borda esquerda.
+  const [alignRight, setAlignRight] = useState(true);
   const containerRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const itemRefs = useRef<Array<HTMLButtonElement | null>>([]);
+
+  const openMenu = () => {
+    const rect = buttonRef.current?.getBoundingClientRect();
+    setAlignRight(!rect || rect.right - MENU_WIDTH >= VIEWPORT_MARGIN);
+    setOpen(true);
+  };
 
   const close = (returnFocus = false) => {
     setOpen(false);
@@ -63,11 +76,11 @@ export function ExportMenu({ busy, onExport }: ExportMenuProps) {
       <button
         ref={buttonRef}
         type="button"
-        onClick={() => setOpen((current) => !current)}
+        onClick={() => (open ? close() : openMenu())}
         onKeyDown={(event) => {
           if (event.key === 'ArrowDown' && !open) {
             event.preventDefault();
-            setOpen(true);
+            openMenu();
           }
         }}
         disabled={busy}
@@ -90,7 +103,7 @@ export function ExportMenu({ busy, onExport }: ExportMenuProps) {
           role="menu"
           aria-label="Formatos de exportação"
           onKeyDown={handleMenuKeyDown}
-          className="absolute top-full right-0 z-30 mt-2 w-72 max-w-[calc(100vw-2rem)] origin-top-right animate-fade-up rounded-xl border border-line bg-white p-1.5 shadow-[0_12px_32px_-12px_rgba(15,20,30,0.28)]"
+          className={`absolute top-full z-30 mt-2 w-72 max-w-[calc(100vw-2rem)] animate-fade-up ${alignRight ? 'right-0 origin-top-right' : 'left-0 origin-top-left'} rounded-xl border border-line bg-white p-1.5 shadow-[0_12px_32px_-12px_rgba(15,20,30,0.28)]`}
         >
           {OPTIONS.map((option, index) => {
             const Icon = option.icon;
