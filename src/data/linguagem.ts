@@ -120,5 +120,11 @@ export const MERGE_PAIRS: Record<string, string> = {
   'vue js': 'vue',
 };
 
+/**
+ * Siglas do dicionário que também são palavras comuns: só contam quando escritas em MAIÚSCULAS.
+ * Ex.: "SOLID" (princípios de programação) × "solid experience" (experiência sólida, em inglês).
+ */
+export const UPPERCASE_ONLY_TERMS: Set<string> = new Set(['solid']);
+
 /** Tokens com barra que são um termo único (os demais "react/vue" são separados). */
 export const KNOWN_SLASH_TOKENS: Set<string> = new Set(['ci/cd', 'ui/ux', 'ux/ui', 'e/ou', 'pl/sql', 'tcp/ip']);

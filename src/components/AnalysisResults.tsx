@@ -1,7 +1,7 @@
 import type { LucideIcon } from 'lucide-react';
 import { ArrowRight, FileText, ListChecks, SlidersHorizontal, Tags } from 'lucide-react';
 import type { KeyboardEvent } from 'react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { AnalysisResult } from '../types/ats';
 import { AtsTips } from './AtsTips';
 import { buttonStyles } from './buttonStyles';
@@ -48,6 +48,8 @@ export function AnalysisResults({ result, runId }: AnalysisResultsProps) {
   useScrollCollapse(sentinelRef, stickyRef, scoreFullRef, scoreCompactRef, collapsible);
   const tabRefs = useRef<Partial<Record<TabId, HTMLButtonElement | null>>>({});
   const [activeTab, setActiveTab] = useState<TabId>('keywords');
+  /** Troca de aba pedida pelo usuário: a rolagem é ajustada depois que a nova aba aparece. */
+  const pendingScrollRef = useRef(false);
 
   // Cada nova análise reabre o diagnóstico de palavras-chave.
   useEffect(() => setActiveTab('keywords'), [runId]);
@@ -76,25 +78,38 @@ export function AnalysisResults({ result, runId }: AnalysisResultsProps) {
   ];
 
   const selectTab = (id: TabId, focus = false) => {
+    pendingScrollRef.current = true;
     setActiveTab(id);
     if (focus) tabRefs.current[id]?.focus();
-    if (!collapsible) {
-      // Celular: se o conteúdo já passou por baixo da barra de abas, volta ao início da nova aba.
-      const barBottom = tabBarRef.current?.getBoundingClientRect().bottom;
-      const panelsTop = panelsRef.current?.getBoundingClientRect().top;
-      if (barBottom !== undefined && panelsTop !== undefined && panelsTop < barBottom) {
-        window.scrollTo({ top: window.scrollY + panelsTop - barBottom });
-      }
-      return;
-    }
-    // Se o usuário já rolou o diagnóstico, leva o início da nova aba para logo abaixo do
-    // cabeçalho fixo, com o score já compacto (fim do trajeto de encolhimento).
-    const sentinelTop = sentinelRef.current?.getBoundingClientRect().top;
-    if (sentinelTop !== undefined && sentinelTop < 0) {
-      const distance = stickyRef.current ? getCollapseDistance(stickyRef.current) : 0;
-      window.scrollTo({ top: window.scrollY + sentinelTop + distance });
-    }
   };
+
+  /**
+   * Ponto de início de uma aba: celular, barra de abas encostada no topo com o conteúdo logo
+   * abaixo; desktop, score já compacto (fim do encolhimento) com o conteúdo logo abaixo do
+   * cabeçalho fixo. Se o usuário já rolou além desse ponto, a nova aba abre nele.
+   *
+   * Roda depois que a nova aba está no DOM: rolar antes (com o conteúdo da aba antiga) deixava o
+   * navegador reajustar a posição ao trocar o conteúdo, e cada aba terminava num lugar diferente.
+   */
+  useLayoutEffect(() => {
+    if (!pendingScrollRef.current) return;
+    pendingScrollRef.current = false;
+
+    let target: number | null = null;
+    if (collapsible) {
+      const sentinelTop = sentinelRef.current?.getBoundingClientRect().top;
+      const distance = stickyRef.current ? getCollapseDistance(stickyRef.current) : 0;
+      if (sentinelTop !== undefined) target = window.scrollY + sentinelTop + distance;
+    } else {
+      const bar = tabBarRef.current;
+      const panelsTop = panelsRef.current?.getBoundingClientRect().top;
+      if (bar && panelsTop !== undefined) {
+        const barSpace = bar.offsetHeight + parseFloat(getComputedStyle(bar).marginBottom);
+        target = window.scrollY + panelsTop - barSpace;
+      }
+    }
+    if (target !== null && window.scrollY > target + 1) window.scrollTo({ top: target });
+  }, [activeTab, collapsible]);
 
   const handleTabKeyDown = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
     const offset = { ArrowRight: 1, ArrowLeft: -1 }[event.key];
@@ -182,7 +197,11 @@ export function AnalysisResults({ result, runId }: AnalysisResultsProps) {
         </>
       )}
 
-      <div ref={panelsRef}>
+      {/*
+        Altura mínima de uma tela: mesmo uma aba curta deixa rolar até o ponto de início dela.
+        overflow-anchor desligado: a troca de aba não pode mover a página por conta própria.
+      */}
+      <div ref={panelsRef} className="min-h-svh [overflow-anchor:none] print:min-h-0">
         <div id="panel-keywords" role="tabpanel" aria-labelledby="tab-keywords" className={`${panelClass('keywords')} print:hidden`}>
           <Card
             title="Diagnóstico de palavras-chave"

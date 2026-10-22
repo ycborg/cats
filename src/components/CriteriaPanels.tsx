@@ -184,8 +184,9 @@ export function LegibilityCard({ legibility }: { legibility: AnalysisResult['leg
       </ul>
       <p className="mt-4 flex gap-2 rounded-xl bg-canvas p-3 text-xs leading-relaxed text-muted">
         <Info className="mt-px size-3.5 shrink-0" aria-hidden="true" />
-        Limitação: o CATS analisa o texto colado. Colunas, tabelas, imagens e cabeçalhos/rodapés do arquivo original não
-        são verificados. Por isso este critério tem peso menor.
+        {legibility.layoutChecked
+          ? 'O layout do arquivo importado foi verificado. Imagens e cabeçalhos/rodapés não são. Por isso este critério tem peso menor.'
+          : 'Limitação: com texto colado, colunas, tabelas, imagens e cabeçalhos/rodapés do arquivo original não são verificados. Importe o arquivo para checar o layout.'}
       </p>
     </CriterionCard>
   );

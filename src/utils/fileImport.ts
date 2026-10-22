@@ -11,6 +11,13 @@ const MAX_FILE_BYTES = 10 * 1024 * 1024;
 /** Abaixo disso, o PDF provavelmente é uma imagem escaneada (sem texto selecionável). */
 const MIN_EXTRACTED_CHARS = 40;
 
+/** Texto extraído do arquivo e o que foi possível observar do layout original. */
+export interface ImportedResume {
+  text: string;
+  /** Layout em duas ou mais colunas (ou tabela usada como layout): muitos ATS misturam a leitura. */
+  multiColumn: boolean;
+}
+
 /** Erro com mensagem pronta para mostrar ao usuário. */
 export class ResumeImportError extends Error {
   override name = 'ResumeImportError';
@@ -42,7 +49,7 @@ function tidy(text: string): string {
  * PDF (pdf.js)
  * ------------------------------------------------------------------------- */
 
-interface PositionedText {
+export interface PositionedText {
   text: string;
   x: number;
   y: number;
@@ -51,25 +58,29 @@ interface PositionedText {
 }
 
 /** Linha reconstruída, com as bordas horizontais (para detectar frases que quebraram na margem). */
-interface PositionedLine {
+export interface PositionedLine {
   text: string;
   left: number;
   right: number;
 }
 
-/** Reconstrói as linhas a partir das posições dos trechos de texto da página. */
-function pageToLines(items: PositionedText[]): PositionedLine[] {
+/** Agrupa os trechos da página em linhas visuais (mesma altura), de cima para baixo. */
+function groupRows(items: PositionedText[]): PositionedText[][] {
   const sorted = [...items].sort((a, b) => b.y - a.y || a.x - b.x);
-  const lines: PositionedText[][] = [];
+  const rows: PositionedText[][] = [];
   for (const item of sorted) {
-    const current = lines[lines.length - 1];
+    const current = rows[rows.length - 1];
     const reference = current?.[0];
     const tolerance = Math.max(2, (reference?.height ?? item.height) * 0.5);
     if (current && reference && Math.abs(reference.y - item.y) <= tolerance) current.push(item);
-    else lines.push([item]);
+    else rows.push([item]);
   }
+  return rows;
+}
 
-  return lines.map((line) => {
+/** Reconstrói as linhas a partir das posições dos trechos de texto da página. */
+export function pageToLines(items: PositionedText[]): PositionedLine[] {
+  return groupRows(items).map((line) => {
     const ordered = line.sort((a, b) => a.x - b.x);
     let text = '';
     let previousEnd: number | null = null;
@@ -95,7 +106,7 @@ const WRAP_WIDTH_RATIO = 0.6;
  * pontuação, e nenhuma das duas é uma linha de contato. Assim parágrafos e conquistas não ficam
  * picotados, e cabeçalho/contatos continuam em linhas separadas.
  */
-function joinWrappedLines(lines: PositionedLine[]): string[] {
+export function joinWrappedLines(lines: PositionedLine[]): string[] {
   const rightEdge = Math.max(0, ...lines.map((line) => line.right));
   const leftEdge = Math.min(...lines.map((line) => line.left));
   const wrapThreshold = leftEdge + (rightEdge - leftEdge) * WRAP_WIDTH_RATIO;
@@ -116,7 +127,45 @@ function joinWrappedLines(lines: PositionedLine[]): string[] {
   return joined.map((line) => line.text);
 }
 
-async function readPdf(buffer: ArrayBuffer): Promise<string> {
+/** Páginas com poucas linhas (capa, rodapé solto) não permitem concluir nada sobre colunas. */
+const MIN_ROWS_FOR_COLUMNS = 8;
+/** Vão mínimo entre colunas, em pontos (~6 mm). */
+const MIN_GUTTER_WIDTH = 16;
+/** Parte das linhas que precisa ter texto dos dois lados do vão. */
+const MIN_SPLIT_RATIO = 0.3;
+/** Parte das linhas que pode atravessar o vão (nome e contatos centralizados no topo, por exemplo). */
+const MAX_CROSSING_RATIO = 0.15;
+
+/**
+ * Detecta página em duas (ou mais) colunas: procura uma faixa vertical, no miolo da página, que
+ * quase nenhuma linha atravessa e que tem texto dos dois lados em boa parte das linhas. Datas
+ * alinhadas à direita num currículo de uma coluna não disparam: o texto corrido atravessa a faixa.
+ */
+export function hasMultipleColumns(items: PositionedText[]): boolean {
+  const rows = groupRows(items);
+  if (rows.length < MIN_ROWS_FOR_COLUMNS) return false;
+  const left = Math.min(...items.map((item) => item.x));
+  const right = Math.max(...items.map((item) => item.x + item.width));
+  const width = right - left;
+  if (width <= 0) return false;
+
+  const isGutterAt = (start: number, end: number): boolean => {
+    let crossing = 0;
+    let split = 0;
+    for (const row of rows) {
+      if (row.some((item) => item.x < end && item.x + item.width > start)) crossing += 1;
+      else if (row.some((item) => item.x + item.width <= start) && row.some((item) => item.x >= end)) split += 1;
+    }
+    return crossing <= rows.length * MAX_CROSSING_RATIO && split >= Math.max(4, rows.length * MIN_SPLIT_RATIO);
+  };
+
+  for (let start = left + width * 0.15; start + MIN_GUTTER_WIDTH <= left + width * 0.85; start += 2) {
+    if (isGutterAt(start, start + MIN_GUTTER_WIDTH)) return true;
+  }
+  return false;
+}
+
+async function readPdf(buffer: ArrayBuffer): Promise<ImportedResume> {
   const pdfjs = await import('pdfjs-dist');
   const { default: workerUrl } = await import('pdfjs-dist/build/pdf.worker.min.mjs?url');
   pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
@@ -133,6 +182,7 @@ async function readPdf(buffer: ArrayBuffer): Promise<string> {
   }
 
   const pages: string[] = [];
+  let multiColumn = false;
   for (let pageNumber = 1; pageNumber <= document.numPages; pageNumber += 1) {
     const page = await document.getPage(pageNumber);
     const content = await page.getTextContent();
@@ -147,10 +197,11 @@ async function readPdf(buffer: ArrayBuffer): Promise<string> {
         height: item.height || Math.abs(item.transform[3] ?? 10),
       });
     }
+    if (!multiColumn && hasMultipleColumns(items)) multiColumn = true;
     pages.push(joinWrappedLines(pageToLines(items)).join('\n'));
   }
   await loadingTask.destroy();
-  return pages.join('\n\n');
+  return { text: pages.join('\n\n'), multiColumn };
 }
 
 /* ---------------------------------------------------------------------------
@@ -167,7 +218,24 @@ function closestParagraph(node: Node): Element | null {
   return null;
 }
 
-async function readDocx(buffer: ArrayBuffer): Promise<string> {
+/**
+ * Layout em colunas no Word: seção com 2+ colunas (Layout → Colunas) ou tabela com texto em mais de
+ * uma célula da mesma linha, recurso comum em modelos de currículo "lado a lado".
+ */
+export function docxHasColumns(xml: Document): boolean {
+  const sectionColumns = Array.from(xml.getElementsByTagNameNS(WORD_NS, 'cols')).some(
+    (cols) => Number(cols.getAttributeNS(WORD_NS, 'num') ?? 1) >= 2,
+  );
+  if (sectionColumns) return true;
+  return Array.from(xml.getElementsByTagNameNS(WORD_NS, 'tr')).some((row) => {
+    const filledCells = Array.from(row.getElementsByTagNameNS(WORD_NS, 'tc')).filter(
+      (cell) => (cell.textContent ?? '').trim().length > 0,
+    );
+    return filledCells.length >= 2;
+  });
+}
+
+async function readDocx(buffer: ArrayBuffer): Promise<ImportedResume> {
   const { unzipSync, strFromU8 } = await import('fflate');
   let files;
   try {
@@ -194,14 +262,14 @@ async function readDocx(buffer: ArrayBuffer): Promise<string> {
     const isListItem = paragraph.getElementsByTagNameNS(WORD_NS, 'numPr').length > 0;
     lines.push(isListItem && text.trim() ? `• ${text}` : text);
   }
-  return lines.join('\n');
+  return { text: lines.join('\n'), multiColumn: docxHasColumns(xml) };
 }
 
 /* ---------------------------------------------------------------------------
  * Entrada pública
  * ------------------------------------------------------------------------- */
 
-export async function readResumeFile(file: File): Promise<string> {
+export async function readResumeFile(file: File): Promise<ImportedResume> {
   if (file.size > MAX_FILE_BYTES) {
     throw new ResumeImportError('Arquivo muito grande (máximo de 10 MB). Um currículo costuma ter bem menos que isso.');
   }
@@ -214,9 +282,13 @@ export async function readResumeFile(file: File): Promise<string> {
     throw new ResumeImportError('Formato não suportado. Envie o currículo em PDF, DOCX ou TXT.');
   }
 
-  const text =
-    kind === 'txt' ? await file.text() : kind === 'pdf' ? await readPdf(await file.arrayBuffer()) : await readDocx(await file.arrayBuffer());
-  const cleaned = tidy(text);
+  const extracted: ImportedResume =
+    kind === 'txt'
+      ? { text: await file.text(), multiColumn: false }
+      : kind === 'pdf'
+        ? await readPdf(await file.arrayBuffer())
+        : await readDocx(await file.arrayBuffer());
+  const cleaned = tidy(extracted.text);
 
   if (cleaned.replace(/\s/g, '').length < MIN_EXTRACTED_CHARS) {
     throw new ResumeImportError(
@@ -225,5 +297,22 @@ export async function readResumeFile(file: File): Promise<string> {
         : 'O arquivo está vazio ou quase sem texto.',
     );
   }
-  return cleaned;
+  return { text: cleaned, multiColumn: extracted.multiColumn };
+}
+
+/** Parte das linhas do arquivo que precisa continuar no campo para o layout dele ainda valer. */
+const SAME_SOURCE_RATIO = 0.6;
+
+/**
+ * O texto do campo ainda é o do arquivo importado? Pequenas edições mantêm o vínculo; colar outro
+ * currículo por cima desfaz (e o alerta de colunas deixa de aparecer).
+ */
+export function isFromImportedFile(imported: Pick<ImportedResume, 'text'>, currentText: string): boolean {
+  const normalize = (text: string) =>
+    text.split('\n').map((line) => line.replace(/\s+/g, ' ').trim()).filter((line) => line.length > 0);
+  const importedLines = normalize(imported.text);
+  if (importedLines.length === 0) return false;
+  const current = new Set(normalize(currentText));
+  const kept = importedLines.filter((line) => current.has(line)).length;
+  return kept / importedLines.length >= SAME_SOURCE_RATIO;
 }

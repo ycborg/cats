@@ -3,11 +3,22 @@ import { findDateRanges } from './dates';
 import type { Block } from './resumeBuilder';
 import { BULLET, EMAIL, PHONE } from './resumeBuilder';
 
+/** O que se sabe do arquivo original (só existe quando o currículo foi importado de PDF/DOCX). */
+export interface FileLayout {
+  multiColumn: boolean;
+}
+
 /**
- * Simula o que o leitor automático do ATS consegue extrair do TEXTO do currículo.
- * Limitação: colunas, tabelas, imagens e cabeçalhos do arquivo original não são visíveis aqui.
+ * Simula o que o leitor automático do ATS consegue extrair do TEXTO do currículo. O layout (colunas,
+ * tabelas) só é verificado quando o texto veio de um arquivo importado; imagens e cabeçalhos do
+ * arquivo original não são visíveis aqui.
  */
-export function analyzeLegibility(resumeText: string, blocks: Block[], typoCount: number): LegibilityAnalysis {
+export function analyzeLegibility(
+  resumeText: string,
+  blocks: Block[],
+  typoCount: number,
+  fileLayout: FileLayout | null = null,
+): LegibilityAnalysis {
   const has = (id: Block['id']) => blocks.some((block) => block.id === id && block.lines.length > 0);
   const experienceLines = blocks.filter((block) => block.id === 'experience').flatMap((block) => block.lines);
   const entryLines = experienceLines.filter((line) => !BULLET.test(line));
@@ -65,6 +76,17 @@ export function analyzeLegibility(resumeText: string, blocks: Block[], typoCount
     },
   ];
 
-  const score = checks.reduce((sum, check) => sum + (check.passed ? check.weight : 0), 0);
-  return { checks, score };
+  if (fileLayout) {
+    checks.push({
+      id: 'layout',
+      label: 'Layout em uma coluna',
+      passed: !fileLayout.multiColumn,
+      weight: 15,
+      hint: 'Seu arquivo parece ter duas colunas ou uma tabela. Muitos ATS leem linha por linha, atravessando as colunas, e misturam as informações. Prefira um modelo de uma coluna.',
+    });
+  }
+
+  const totalWeight = checks.reduce((sum, check) => sum + check.weight, 0);
+  const passedWeight = checks.reduce((sum, check) => sum + (check.passed ? check.weight : 0), 0);
+  return { checks, score: Math.round((passedWeight / totalWeight) * 100), layoutChecked: fileLayout !== null };
 }

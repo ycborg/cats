@@ -18,8 +18,8 @@ O CATS analisa a compatibilidade do seu currículo com uma vaga, do jeito que os
 
 - **Score composto**, com cinco critérios: palavras-chave, título do cargo, anos de experiência, formação e legibilidade ATS. Critérios que a vaga não exige saem da conta.
 - **Palavras-chave de 15 áreas** (TI, finanças, RH, jurídico, saúde, engenharia, educação, design e outras), com sinônimos e detecção de erros de digitação.
-- **Currículo reestruturado** no formato vertical aceito por ATS, editável e exportável em PDF.
-- **Importação de arquivo:** carregue o currículo em PDF, DOCX (Word) ou TXT, pelo botão ou arrastando o arquivo, sem precisar copiar e colar.
+- **Currículo reestruturado** no formato vertical aceito por ATS, editável e exportável em PDF, Word (.docx) ou texto.
+- **Importação de arquivo:** carregue o currículo em PDF, DOCX (Word) ou TXT, pelo botão ou arrastando o arquivo, sem precisar copiar e colar. Layouts em duas colunas são detectados e sinalizados.
 - **100% no navegador:** seu currículo, colado ou importado, nunca é enviado a servidores, APIs ou inteligência artificial.
 
 ## Rodando localmente
@@ -35,6 +35,12 @@ Para gerar a versão de produção (pasta `dist/`):
 npm run build
 ```
 
+Para rodar os testes do motor de análise ([guia](tests/README.md)):
+
+```bash
+npm test
+```
+
 ## Estrutura
 
 | Pasta | Conteúdo |
@@ -43,8 +49,9 @@ npm run build
 | `src/utils/` | Motor de análise: palavras-chave, título, experiência, formação, legibilidade |
 | `src/data/` | Dicionário de competências por área e palavras de cargo ([guia de edição](src/data/README.md)) |
 | `src/types/` | Tipagens TypeScript |
+| `tests/` | Testes automáticos e o cadastro de casos do filtro |
 
-O deploy no GitHub Pages é automático a cada push na branch `main` (`.github/workflows/deploy.yml`).
+O deploy no GitHub Pages é automático a cada push na branch `main` (`.github/workflows/deploy.yml`) e só acontece se todos os testes passarem.
 
 ## Sugestões e bugs
 

@@ -143,6 +143,8 @@ export interface LegibilityCheck {
 export interface LegibilityAnalysis {
   checks: LegibilityCheck[];
   score: number;
+  /** O layout do arquivo original (colunas, tabelas) foi verificado. */
+  layoutChecked: boolean;
 }
 
 /** Termo encontrado só por equivalência (ex.: vaga diz "JavaScript", currículo diz "JS"). */

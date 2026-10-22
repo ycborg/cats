@@ -1,5 +1,6 @@
 import { HEAD_WORDS } from '../data/cargos';
 import { HARD_SKILLS, SOFT_SKILLS, SYNONYM_GROUPS } from '../data/lexicon';
+import { UPPERCASE_ONLY_TERMS } from '../data/linguagem';
 import type { Keyword, KeywordCategory, SynonymHint, TypoAlert } from '../types/ats';
 import type { JobSectionMode } from './jobSections';
 import { jobContentLines } from './jobSections';
@@ -75,11 +76,19 @@ function lexiconCategory(key: string): LexiconEntry['category'] | null {
   return LEXICON.get(resolve(key))?.category ?? null;
 }
 
+/** Sigla que também é palavra comum ("SOLID" × "solid") só vale escrita em maiúsculas no trecho. */
+function isWrittenAsTerm(key: string, raw: string): boolean {
+  if (!UPPERCASE_ONLY_TERMS.has(key)) return true;
+  return new RegExp(`(?<![\\p{L}])${key.toUpperCase()}(?![\\p{L}])`, 'u').test(raw);
+}
+
 /* ---------------------------------------------------------------------------
  * Extração de keywords da vaga
  * ------------------------------------------------------------------------- */
 
 interface Segment {
+  /** Trecho original, com maiúsculas (para as siglas que só valem em maiúsculas). */
+  raw: string;
   tokens: string[];
   keys: string[];
   mode: JobSectionMode;
@@ -88,9 +97,9 @@ interface Segment {
 function segmentJob(jobText: string): Segment[] {
   return jobContentLines(jobText).flatMap(({ text, mode }) =>
     splitSegments(text)
-      .map((part) => tokenize(part))
-      .filter((tokens) => tokens.length > 0)
-      .map((tokens) => ({ tokens, keys: tokens.map(canonicalToken), mode })),
+      .map((part) => ({ raw: part, tokens: tokenize(part) }))
+      .filter(({ tokens }) => tokens.length > 0)
+      .map(({ raw, tokens }) => ({ raw, tokens, keys: tokens.map(canonicalToken), mode })),
   );
 }
 
@@ -161,11 +170,11 @@ export function extractKeywords(jobText: string): Keyword[] {
   };
 
   // 1) Termos do dicionário: sempre contam, mesmo citados uma única vez (maior expressão primeiro).
-  const coveredBySegment = segments.map(({ tokens, keys, mode }) => {
+  const coveredBySegment = segments.map(({ raw, tokens, keys, mode }) => {
     const covered = new Array<boolean>(keys.length).fill(false);
     for (let i = 0; i < keys.length; ) {
       const match = longestLexiconMatch(keys, i);
-      if (!match) {
+      if (!match || !isWrittenAsTerm(match.key, raw)) {
         i += 1;
         continue;
       }
@@ -262,8 +271,10 @@ function indexText(text: string): ResumeIndex {
     const literals = tokens.map(literalToken);
     for (let i = 0; i < keys.length; i += 1) {
       for (let length = 1; length <= MAX_PHRASE && i + length <= keys.length; length += 1) {
+        const key = keys.slice(i, i + length).join(' ');
+        if (!isWrittenAsTerm(resolve(key), segment)) continue;
         add(
-          keys.slice(i, i + length).join(' '),
+          key,
           literals.slice(i, i + length).join(' '),
           tokens.slice(i, i + length).join(' '),
         );

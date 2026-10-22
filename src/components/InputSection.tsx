@@ -5,6 +5,7 @@ import { useLayoutEffect, useRef, useState } from 'react';
 import { countWords } from '../utils/textProcessing';
 import type { SampleId } from '../utils/sampleData';
 import { buttonStyles } from './buttonStyles';
+import type { ImportedResume } from '../utils/fileImport';
 import { ResumeImportButton, useResumeImport } from './ResumeImport';
 import { SampleMenu } from './SampleMenu';
 
@@ -247,6 +248,8 @@ interface InputSectionProps {
   autoGrow: boolean;
   onJobChange: (value: string) => void;
   onResumeChange: (value: string) => void;
+  /** Arquivo lido na importação (o layout dele entra na análise de legibilidade). */
+  onResumeImported: (imported: ImportedResume) => void;
   onLoadSample: (id: SampleId) => void;
   onClear: () => void;
   onAnalyze: () => void;
@@ -262,13 +265,14 @@ export function InputSection({
   autoGrow,
   onJobChange,
   onResumeChange,
+  onResumeImported,
   onLoadSample,
   onClear,
   onAnalyze,
 }: InputSectionProps) {
   const fieldsRef = useRef<HTMLDivElement>(null);
   const [split, setSplit] = useState(DEFAULT_SPLIT);
-  const { importing, importFile } = useResumeImport(resumeText, onResumeChange);
+  const { importing, importFile } = useResumeImport(resumeText, onResumeChange, onResumeImported);
 
   const isReady = jobText.trim().length >= MIN_CHARS && resumeText.trim().length >= MIN_CHARS;
   const hasContent = jobText.length > 0 || resumeText.length > 0;

@@ -2,6 +2,7 @@ import type { AnalysisResult, MatchLevel, SubScore, SubScoreId } from '../types/
 import { EDUCATION_LEVEL_LABEL, analyzeEducation } from './educationAnalyzer';
 import { analyzeExperience } from './experienceAnalyzer';
 import { matchKeywords } from './keywordAnalyzer';
+import type { FileLayout } from './legibilityAnalyzer';
 import { analyzeLegibility } from './legibilityAnalyzer';
 import { buildMissingSuggestions, buildTips } from './recommendations';
 import { buildAtsResume, parseBlocks } from './resumeBuilder';
@@ -41,7 +42,12 @@ export function classifyScore(score: number): MatchLevel {
 const formatYears = (years: number): string =>
   `${years.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} ${years === 1 ? 'ano' : 'anos'}`;
 
-export function analyzeResume(jobText: string, resumeText: string): AnalysisResult {
+export interface AnalyzeOptions {
+  /** Layout do arquivo de onde o currículo foi importado (ausente quando o texto foi colado). */
+  fileLayout?: FileLayout | null;
+}
+
+export function analyzeResume(jobText: string, resumeText: string, options: AnalyzeOptions = {}): AnalysisResult {
   const { headerLines, blocks } = parseBlocks(resumeText);
 
   const keywordMatch = matchKeywords(jobText, resumeText, blocks, headerLines);
@@ -50,7 +56,7 @@ export function analyzeResume(jobText: string, resumeText: string): AnalysisResu
   const experience = analyzeExperience(jobText, { blocks, jobTitle: jobTitle?.normalized ?? null });
   const title = analyzeTitle(jobText, resume.headline, experience.entries);
   const education = analyzeEducation(jobText, resumeText, blocks);
-  const legibility = analyzeLegibility(resumeText, blocks, keywordMatch.typoAlerts.length);
+  const legibility = analyzeLegibility(resumeText, blocks, keywordMatch.typoAlerts.length, options.fileLayout ?? null);
 
   const inContext = keywordMatch.found.filter((keyword) => keyword.inContext).length;
   const totalKeywords = keywordMatch.found.length + keywordMatch.missing.length;
