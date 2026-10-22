@@ -4,20 +4,27 @@ import { ACCEPTED_RESUME_FILES, ResumeImportError, readResumeFile } from '../uti
 import { buttonStyles } from './buttonStyles';
 import { useToast } from './Toast';
 
-/** Lê o arquivo do currículo e preenche o campo, com confirmação antes de substituir texto já digitado. */
+/**
+ * Lê o arquivo do currículo e preenche o campo. Se já havia texto, ele é substituído sem perguntar,
+ * e o aviso de sucesso oferece "Desfazer" para recuperá-lo.
+ */
 export function useResumeImport(currentText: string, onImported: (text: string) => void) {
   const showToast = useToast();
   const [importing, setImporting] = useState(false);
 
   const importFile = async (file: File) => {
     if (importing) return;
-    if (currentText.trim() && !window.confirm('Substituir o texto atual do currículo pelo conteúdo do arquivo?')) return;
+    const previousText = currentText;
 
     setImporting(true);
     try {
       const text = await readResumeFile(file);
       onImported(text);
-      showToast(`Currículo importado de "${file.name}". Confira o texto antes de analisar.`);
+      showToast(
+        `Currículo importado de "${file.name}". Confira o texto antes de analisar.`,
+        'success',
+        previousText.trim() ? { label: 'Desfazer', onClick: () => onImported(previousText) } : undefined,
+      );
     } catch (error) {
       showToast(
         error instanceof ResumeImportError ? error.message : 'Não foi possível ler o arquivo. Tente salvá-lo em outro formato.',
