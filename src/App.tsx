@@ -34,7 +34,7 @@ export default function App() {
   const inputColumnHeight = useViewportFitHeight(inputColumnRef, isStickyLayout, {
     stickyTop: STICKY_TOP_PX,
     bottomGap: STICKY_TOP_PX,
-    minHeight: 560,
+    minHeight: 480,
   });
   const [sampleLoaded, flashSampleLoaded] = useTransientFlag(2200);
   const [analysisDone, flashAnalysisDone] = useTransientFlag(2200);

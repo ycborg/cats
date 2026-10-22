@@ -1,10 +1,11 @@
 import type { LucideIcon } from 'lucide-react';
 import { Briefcase, Check, Eraser, LoaderCircle, ScanSearch, UserRound } from 'lucide-react';
-import type { CSSProperties, KeyboardEvent, PointerEvent, RefObject } from 'react';
+import type { CSSProperties, DragEvent, KeyboardEvent, PointerEvent, ReactNode, RefObject } from 'react';
 import { useLayoutEffect, useRef, useState } from 'react';
 import { countWords } from '../utils/textProcessing';
 import type { SampleId } from '../utils/sampleData';
 import { buttonStyles } from './buttonStyles';
+import { ResumeImportButton, useResumeImport } from './ResumeImport';
 import { SampleMenu } from './SampleMenu';
 
 const MIN_CHARS = 40;
@@ -30,6 +31,10 @@ interface TextFieldProps {
   /** Uma coluna (celular/tablet): o campo cresce com o texto, sem rolagem interna. */
   autoGrow: boolean;
   style?: CSSProperties;
+  /** Ação exibida no centro do campo enquanto ele está vazio (ex.: botão "Importar"). */
+  emptyAction?: ReactNode;
+  /** Quando definido, o card aceita arrastar e soltar um arquivo. */
+  onFileDrop?: (file: File) => void;
   onChange: (value: string) => void;
 }
 
@@ -71,21 +76,53 @@ function TextField({
   fitted,
   autoGrow,
   style,
+  emptyAction,
+  onFileDrop,
   onChange,
 }: TextFieldProps) {
   const chars = value.length;
   const words = countWords(value);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [dragActive, setDragActive] = useState(false);
+  const showEmptyAction = Boolean(emptyAction) && !value;
   useAutoGrow(textareaRef, value, autoGrow && !fitted);
+
+  const isFileDrag = (event: DragEvent) => Array.from(event.dataTransfer.types).includes('Files');
+  const dropHandlers = onFileDrop
+    ? {
+        onDragOver: (event: DragEvent<HTMLDivElement>) => {
+          if (!isFileDrag(event)) return;
+          event.preventDefault();
+          setDragActive(true);
+        },
+        onDragLeave: (event: DragEvent<HTMLDivElement>) => {
+          // Ignora a saída para elementos filhos; só desliga ao sair do card.
+          if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDragActive(false);
+        },
+        onDrop: (event: DragEvent<HTMLDivElement>) => {
+          if (!isFileDrag(event)) return;
+          event.preventDefault();
+          setDragActive(false);
+          const file = event.dataTransfer.files[0];
+          if (file) onFileDrop(file);
+        },
+      }
+    : {};
 
   return (
     <div
       style={style}
-      className={`rounded-2xl border border-line bg-white p-5 shadow-[0_1px_2px_rgba(15,20,30,0.04)] ${
-        fitted ? 'flex min-h-[190px] flex-col' : ''
+      {...dropHandlers}
+      className={`relative rounded-2xl border border-line bg-white p-5 shadow-[0_1px_2px_rgba(15,20,30,0.04)] ${
+        fitted ? 'flex min-h-[150px] flex-col short:p-4' : ''
       }`}
     >
-      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+      {dragActive && (
+        <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-2xl border-2 border-dashed border-ink/40 bg-white/90 text-sm font-medium text-ink">
+          Solte o arquivo para importar (PDF, DOCX ou TXT)
+        </div>
+      )}
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
         <label htmlFor={id} className="flex items-center gap-2 text-sm font-semibold text-ink">
           <Icon className="size-4" aria-hidden="true" />
           {label}
@@ -94,25 +131,40 @@ function TextField({
           {chars.toLocaleString('pt-BR')} caracteres · {words.toLocaleString('pt-BR')} palavras
         </span>
       </div>
-      <p id={`${id}-hint`} className="mt-1 text-xs text-muted">
+      {/* Em telas baixas com a coluna fixa, a explicação some da tela (continua para leitores de tela). */}
+      <p id={`${id}-hint`} className={`mt-1 text-xs text-muted ${fitted ? 'short:sr-only' : ''}`}>
         {description}
       </p>
       {/*
         Fonte de 16px no celular: abaixo disso o Safari do iPhone dá zoom automático ao tocar no
         campo e a página fica ampliada, com rolagem horizontal.
       */}
-      <textarea
-        ref={textareaRef}
-        id={id}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        placeholder={placeholder}
-        aria-describedby={`${id}-hint`}
-        spellCheck={false}
-        className={`mt-3 block w-full rounded-xl border border-line bg-canvas px-4 py-3 text-base leading-relaxed text-body transition-colors duration-200 placeholder:text-muted hover:border-slate-300 focus:border-ink focus:bg-white focus:ring-4 focus:ring-ink/10 focus:outline-none sm:text-sm ${
-          fitted ? 'min-h-0 flex-1 resize-none' : autoGrow ? 'resize-none overflow-hidden' : 'h-[260px] resize-y'
-        } ${highlight ? 'animate-field-flash' : ''}`}
-      />
+      <div className={`relative mt-3 ${fitted ? 'flex min-h-0 flex-1 flex-col' : ''}`}>
+        <textarea
+          ref={textareaRef}
+          id={id}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          // Com a ação central visível, o texto de exemplo vira legenda abaixo dela (evita sobreposição).
+          placeholder={showEmptyAction ? undefined : placeholder}
+          aria-describedby={`${id}-hint`}
+          spellCheck={false}
+          className={`block w-full rounded-xl border border-line bg-canvas px-4 py-3 text-base leading-relaxed text-body transition-colors duration-200 placeholder:text-muted hover:border-slate-300 focus:border-ink focus:bg-white focus:ring-4 focus:ring-ink/10 focus:outline-none sm:text-sm ${
+            fitted ? 'min-h-0 flex-1 resize-none' : autoGrow ? 'resize-none overflow-hidden' : 'h-[260px] resize-y'
+          } ${highlight ? 'animate-field-flash' : ''}`}
+        />
+        {/*
+          Ação no centro do campo, só enquanto ele está vazio (ex.: "Importar"), com o texto de exemplo
+          como legenda logo abaixo. A camada não captura cliques: clicar fora do botão continua
+          focando o campo para digitar ou colar.
+        */}
+        {showEmptyAction && (
+          <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-0.5 px-4 text-center">
+            <div className="pointer-events-auto">{emptyAction}</div>
+            <p className="text-xs text-muted">{placeholder}</p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -216,6 +268,7 @@ export function InputSection({
 }: InputSectionProps) {
   const fieldsRef = useRef<HTMLDivElement>(null);
   const [split, setSplit] = useState(DEFAULT_SPLIT);
+  const { importing, importFile } = useResumeImport(resumeText, onResumeChange);
 
   const isReady = jobText.trim().length >= MIN_CHARS && resumeText.trim().length >= MIN_CHARS;
   const hasContent = jobText.length > 0 || resumeText.length > 0;
@@ -255,14 +308,16 @@ export function InputSection({
         <TextField
           id="current-resume"
           label="Currículo Atual"
-          description="Cole a íntegra do seu currículo em texto. Títulos como Resumo, Experiência e Formação ajudam na reestruturação."
-          placeholder="Ex.: Nome Sobrenome — Desenvolvedora Front-end — e-mail | telefone | LinkedIn..."
+          description="Importe o arquivo (PDF, DOCX ou TXT), arraste-o até aqui ou cole o texto. Títulos como Resumo, Experiência e Formação ajudam na reestruturação."
+          placeholder="ou cole o texto do currículo aqui"
           icon={UserRound}
           value={resumeText}
           highlight={sampleLoaded}
           fitted={fitted}
           autoGrow={autoGrow}
           style={fitted ? { flex: `${1 - split} 1 0px` } : undefined}
+          emptyAction={<ResumeImportButton importing={importing} onFile={importFile} />}
+          onFileDrop={importFile}
           onChange={onResumeChange}
         />
       </div>
