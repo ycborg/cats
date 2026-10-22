@@ -31,8 +31,8 @@ interface TextFieldProps {
   /** Uma coluna (celular/tablet): o campo cresce com o texto, sem rolagem interna. */
   autoGrow: boolean;
   style?: CSSProperties;
-  /** Ação extra no cabeçalho do card (ex.: botão de importar arquivo). */
-  headerAction?: ReactNode;
+  /** Ação exibida no centro do campo enquanto ele está vazio (ex.: botão "Importar"). */
+  emptyAction?: ReactNode;
   /** Quando definido, o card aceita arrastar e soltar um arquivo. */
   onFileDrop?: (file: File) => void;
   onChange: (value: string) => void;
@@ -76,7 +76,7 @@ function TextField({
   fitted,
   autoGrow,
   style,
-  headerAction,
+  emptyAction,
   onFileDrop,
   onChange,
 }: TextFieldProps) {
@@ -126,12 +126,9 @@ function TextField({
           <Icon className="size-4" aria-hidden="true" />
           {label}
         </label>
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-          <span className="text-xs text-muted tabular-nums" aria-live="polite">
-            {chars.toLocaleString('pt-BR')} caracteres · {words.toLocaleString('pt-BR')} palavras
-          </span>
-          {headerAction}
-        </div>
+        <span className="text-xs text-muted tabular-nums" aria-live="polite">
+          {chars.toLocaleString('pt-BR')} caracteres · {words.toLocaleString('pt-BR')} palavras
+        </span>
       </div>
       {/* Em telas baixas com a coluna fixa, a explicação some da tela (continua para leitores de tela). */}
       <p id={`${id}-hint`} className={`mt-1 text-xs text-muted ${fitted ? 'short:sr-only' : ''}`}>
@@ -141,18 +138,29 @@ function TextField({
         Fonte de 16px no celular: abaixo disso o Safari do iPhone dá zoom automático ao tocar no
         campo e a página fica ampliada, com rolagem horizontal.
       */}
-      <textarea
-        ref={textareaRef}
-        id={id}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        placeholder={placeholder}
-        aria-describedby={`${id}-hint`}
-        spellCheck={false}
-        className={`mt-3 block w-full rounded-xl border border-line bg-canvas px-4 py-3 text-base leading-relaxed text-body transition-colors duration-200 placeholder:text-muted hover:border-slate-300 focus:border-ink focus:bg-white focus:ring-4 focus:ring-ink/10 focus:outline-none sm:text-sm ${
-          fitted ? 'min-h-0 flex-1 resize-none' : autoGrow ? 'resize-none overflow-hidden' : 'h-[260px] resize-y'
-        } ${highlight ? 'animate-field-flash' : ''}`}
-      />
+      <div className={`relative mt-3 ${fitted ? 'flex min-h-0 flex-1 flex-col' : ''}`}>
+        <textarea
+          ref={textareaRef}
+          id={id}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          placeholder={placeholder}
+          aria-describedby={`${id}-hint`}
+          spellCheck={false}
+          className={`block w-full rounded-xl border border-line bg-canvas px-4 py-3 text-base leading-relaxed text-body transition-colors duration-200 placeholder:text-muted hover:border-slate-300 focus:border-ink focus:bg-white focus:ring-4 focus:ring-ink/10 focus:outline-none sm:text-sm ${
+            fitted ? 'min-h-0 flex-1 resize-none' : autoGrow ? 'resize-none overflow-hidden' : 'h-[260px] resize-y'
+          } ${highlight ? 'animate-field-flash' : ''}`}
+        />
+        {/*
+          Ação no centro do campo, só enquanto ele está vazio (ex.: "Importar"). A camada não captura
+          cliques: clicar fora do botão continua focando o campo para digitar ou colar.
+        */}
+        {emptyAction && !value && (
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center pt-6">
+            <div className="pointer-events-auto">{emptyAction}</div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -297,14 +305,14 @@ export function InputSection({
           id="current-resume"
           label="Currículo Atual"
           description="Importe o arquivo (PDF, DOCX ou TXT), arraste-o até aqui ou cole o texto. Títulos como Resumo, Experiência e Formação ajudam na reestruturação."
-          placeholder="Ex.: Nome Sobrenome — Desenvolvedora Front-end — e-mail | telefone | LinkedIn..."
+          placeholder="Ou cole aqui o texto do seu currículo…"
           icon={UserRound}
           value={resumeText}
           highlight={sampleLoaded}
           fitted={fitted}
           autoGrow={autoGrow}
           style={fitted ? { flex: `${1 - split} 1 0px` } : undefined}
-          headerAction={<ResumeImportButton importing={importing} onFile={importFile} />}
+          emptyAction={<ResumeImportButton importing={importing} onFile={importFile} />}
           onFileDrop={importFile}
           onChange={onResumeChange}
         />

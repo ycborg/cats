@@ -9,11 +9,6 @@ export const buttonStyles = {
   primary: `${base} bg-ink px-5 py-3 text-sm font-semibold text-white shadow-sm hover:bg-ink-soft hover:shadow-md focus-visible:ring-ink/25 disabled:opacity-45`,
   primaryCompact: `${base} bg-ink px-3.5 py-2 text-sm font-medium text-white shadow-sm hover:bg-ink-soft hover:shadow-md focus-visible:ring-ink/25 disabled:opacity-60`,
   secondary: `${base} border border-line bg-white px-3.5 py-2 text-sm font-medium text-ink hover:border-ink/40 hover:bg-canvas focus-visible:ring-ink/15 disabled:opacity-60`,
-  /**
-   * Botão pequeno dentro de cards (ex.: "Importar PDF ou Word"). No celular fica maior, com área de
-   * toque confortável (~40px); a partir de "sm" fica compacto.
-   */
-  small: `${base} border border-line bg-white px-3.5 py-2.5 text-sm font-medium text-ink hover:border-ink/40 hover:bg-canvas focus-visible:ring-ink/15 disabled:opacity-60 sm:px-2.5 sm:py-1.5 sm:text-xs`,
   ghost: `${base} px-3 py-2 text-sm font-medium text-muted hover:bg-white hover:text-ink focus-visible:ring-ink/15 disabled:opacity-40`,
   /** Estado de confirmação temporário ("Copiado!", "Exemplo carregado"). */
   success: 'border-found-border! bg-found-bg! text-found-text!',
