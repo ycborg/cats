@@ -12,16 +12,20 @@ import type { AnalysisResult, UiStatus } from './types/ats';
 import { MATCH_LEVEL_LABEL, analyzeResume } from './utils/atsAnalyzer';
 import type { SampleId } from './utils/sampleData';
 import { SAMPLES } from './utils/sampleData';
+import { loadDraft, saveDraft } from './utils/draftStorage';
 
 /** A análise é instantânea; o atraso existe só para o feedback visual do estado de carregamento. */
 const ANALYSIS_DELAY_MS = 1100;
 const DESKTOP_BREAKPOINT = 1024;
+const DRAFT_SAVE_DELAY_MS = 400;
 /** Deve bater com `top-6` da coluna fixa. */
 const STICKY_TOP_PX = 24;
 
 export default function App() {
-  const [jobText, setJobText] = useState('');
-  const [resumeText, setResumeText] = useState('');
+  // O rascunho salvo no navegador é lido uma única vez, ao abrir a página.
+  const [initialDraft] = useState(loadDraft);
+  const [jobText, setJobText] = useState(initialDraft.jobText);
+  const [resumeText, setResumeText] = useState(initialDraft.resumeText);
   const [status, setStatus] = useState<UiStatus>('idle');
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [runId, setRunId] = useState(0);
@@ -40,6 +44,12 @@ export default function App() {
   const [analysisDone, flashAnalysisDone] = useTransientFlag(2200);
 
   useEffect(() => () => window.clearTimeout(timerRef.current), []);
+
+  // Guarda o rascunho no navegador (com pequena espera, para não gravar a cada tecla).
+  useEffect(() => {
+    const timer = window.setTimeout(() => saveDraft({ jobText, resumeText }), DRAFT_SAVE_DELAY_MS);
+    return () => window.clearTimeout(timer);
+  }, [jobText, resumeText]);
 
   const handleAnalyze = useCallback(() => {
     window.clearTimeout(timerRef.current);
