@@ -38,6 +38,22 @@ export function useResumeImport(currentText: string, onImported: (text: string) 
   return { importing, importFile };
 }
 
+/**
+ * Moldura só nos cantos (estilo "mira", como o ícone de analisar): quatro "L" arredondados na cor do
+ * texto, que escurecem junto com ele no hover.
+ */
+function CornerFrame() {
+  const corner = 'pointer-events-none absolute size-2.5 border-current';
+  return (
+    <span aria-hidden="true">
+      <span className={`${corner} top-0 left-0 rounded-tl-md border-t-[1.5px] border-l-[1.5px]`} />
+      <span className={`${corner} top-0 right-0 rounded-tr-md border-t-[1.5px] border-r-[1.5px]`} />
+      <span className={`${corner} bottom-0 left-0 rounded-bl-md border-b-[1.5px] border-l-[1.5px]`} />
+      <span className={`${corner} right-0 bottom-0 rounded-br-md border-r-[1.5px] border-b-[1.5px]`} />
+    </span>
+  );
+}
+
 interface ResumeImportButtonProps {
   importing: boolean;
   onFile: (file: File) => void;
@@ -55,8 +71,9 @@ export function ResumeImportButton({ importing, onFile }: ResumeImportButtonProp
         aria-busy={importing}
         title="PDF, DOCX ou TXT. O arquivo é lido no seu navegador e não é enviado a lugar nenhum."
         aria-label={importing ? 'Lendo arquivo' : 'Importar currículo de um arquivo PDF, DOCX ou TXT'}
-        className={buttonStyles.ghost}
+        className={`${buttonStyles.ghost} relative`}
       >
+        <CornerFrame />
         {importing ? (
           <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
         ) : (
