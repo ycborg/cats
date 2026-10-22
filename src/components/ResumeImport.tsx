@@ -55,7 +55,7 @@ export function ResumeImportButton({ importing, onFile }: ResumeImportButtonProp
         aria-busy={importing}
         title="PDF, DOCX ou TXT. O arquivo é lido no seu navegador e não é enviado a lugar nenhum."
         aria-label={importing ? 'Lendo arquivo' : 'Importar currículo de um arquivo PDF, DOCX ou TXT'}
-        className={`${buttonStyles.secondary} shadow-sm`}
+        className={buttonStyles.ghost}
       >
         {importing ? (
           <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />

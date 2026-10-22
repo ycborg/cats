@@ -84,6 +84,7 @@ function TextField({
   const words = countWords(value);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [dragActive, setDragActive] = useState(false);
+  const showEmptyAction = Boolean(emptyAction) && !value;
   useAutoGrow(textareaRef, value, autoGrow && !fitted);
 
   const isFileDrag = (event: DragEvent) => Array.from(event.dataTransfer.types).includes('Files');
@@ -144,7 +145,8 @@ function TextField({
           id={id}
           value={value}
           onChange={(event) => onChange(event.target.value)}
-          placeholder={placeholder}
+          // Com a ação central visível, o texto de exemplo vira legenda abaixo dela (evita sobreposição).
+          placeholder={showEmptyAction ? undefined : placeholder}
           aria-describedby={`${id}-hint`}
           spellCheck={false}
           className={`block w-full rounded-xl border border-line bg-canvas px-4 py-3 text-base leading-relaxed text-body transition-colors duration-200 placeholder:text-muted hover:border-slate-300 focus:border-ink focus:bg-white focus:ring-4 focus:ring-ink/10 focus:outline-none sm:text-sm ${
@@ -152,12 +154,14 @@ function TextField({
           } ${highlight ? 'animate-field-flash' : ''}`}
         />
         {/*
-          Ação no centro do campo, só enquanto ele está vazio (ex.: "Importar"). A camada não captura
-          cliques: clicar fora do botão continua focando o campo para digitar ou colar.
+          Ação no centro do campo, só enquanto ele está vazio (ex.: "Importar"), com o texto de exemplo
+          como legenda logo abaixo. A camada não captura cliques: clicar fora do botão continua
+          focando o campo para digitar ou colar.
         */}
-        {emptyAction && !value && (
-          <div className="pointer-events-none absolute inset-0 flex items-center justify-center pt-6">
+        {showEmptyAction && (
+          <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-0.5 px-4 text-center">
             <div className="pointer-events-auto">{emptyAction}</div>
+            <p className="text-xs text-muted">{placeholder}</p>
           </div>
         )}
       </div>
@@ -305,7 +309,7 @@ export function InputSection({
           id="current-resume"
           label="Currículo Atual"
           description="Importe o arquivo (PDF, DOCX ou TXT), arraste-o até aqui ou cole o texto. Títulos como Resumo, Experiência e Formação ajudam na reestruturação."
-          placeholder="Ou cole aqui o texto do seu currículo…"
+          placeholder="ou cole o texto do currículo aqui"
           icon={UserRound}
           value={resumeText}
           highlight={sampleLoaded}
