@@ -19,7 +19,8 @@ O CATS analisa a compatibilidade do seu currículo com uma vaga, do jeito que os
 - **Score composto**, com cinco critérios: palavras-chave, título do cargo, anos de experiência, formação e legibilidade ATS. Critérios que a vaga não exige saem da conta.
 - **Palavras-chave de 15 áreas** (TI, finanças, RH, jurídico, saúde, engenharia, educação, design e outras), com sinônimos e detecção de erros de digitação.
 - **Currículo reestruturado** no formato vertical aceito por ATS, editável e exportável em PDF.
-- **100% no navegador:** seu currículo nunca é enviado a servidores, APIs ou inteligência artificial.
+- **Importação de arquivo:** carregue o currículo em PDF, DOCX (Word) ou TXT, pelo botão ou arrastando o arquivo, sem precisar copiar e colar.
+- **100% no navegador:** seu currículo, colado ou importado, nunca é enviado a servidores, APIs ou inteligência artificial.
 
 ## Rodando localmente
 

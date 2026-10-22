@@ -1,10 +1,11 @@
 import type { LucideIcon } from 'lucide-react';
 import { Briefcase, Check, Eraser, LoaderCircle, ScanSearch, UserRound } from 'lucide-react';
-import type { CSSProperties, KeyboardEvent, PointerEvent, RefObject } from 'react';
+import type { CSSProperties, DragEvent, KeyboardEvent, PointerEvent, ReactNode, RefObject } from 'react';
 import { useLayoutEffect, useRef, useState } from 'react';
 import { countWords } from '../utils/textProcessing';
 import type { SampleId } from '../utils/sampleData';
 import { buttonStyles } from './buttonStyles';
+import { ResumeImportButton, useResumeImport } from './ResumeImport';
 import { SampleMenu } from './SampleMenu';
 
 const MIN_CHARS = 40;
@@ -30,6 +31,10 @@ interface TextFieldProps {
   /** Uma coluna (celular/tablet): o campo cresce com o texto, sem rolagem interna. */
   autoGrow: boolean;
   style?: CSSProperties;
+  /** Ação extra no cabeçalho do card (ex.: botão de importar arquivo). */
+  headerAction?: ReactNode;
+  /** Quando definido, o card aceita arrastar e soltar um arquivo. */
+  onFileDrop?: (file: File) => void;
   onChange: (value: string) => void;
 }
 
@@ -71,28 +76,62 @@ function TextField({
   fitted,
   autoGrow,
   style,
+  headerAction,
+  onFileDrop,
   onChange,
 }: TextFieldProps) {
   const chars = value.length;
   const words = countWords(value);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [dragActive, setDragActive] = useState(false);
   useAutoGrow(textareaRef, value, autoGrow && !fitted);
+
+  const isFileDrag = (event: DragEvent) => Array.from(event.dataTransfer.types).includes('Files');
+  const dropHandlers = onFileDrop
+    ? {
+        onDragOver: (event: DragEvent<HTMLDivElement>) => {
+          if (!isFileDrag(event)) return;
+          event.preventDefault();
+          setDragActive(true);
+        },
+        onDragLeave: (event: DragEvent<HTMLDivElement>) => {
+          // Ignora a saída para elementos filhos; só desliga ao sair do card.
+          if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDragActive(false);
+        },
+        onDrop: (event: DragEvent<HTMLDivElement>) => {
+          if (!isFileDrag(event)) return;
+          event.preventDefault();
+          setDragActive(false);
+          const file = event.dataTransfer.files[0];
+          if (file) onFileDrop(file);
+        },
+      }
+    : {};
 
   return (
     <div
       style={style}
-      className={`rounded-2xl border border-line bg-white p-5 shadow-[0_1px_2px_rgba(15,20,30,0.04)] ${
+      {...dropHandlers}
+      className={`relative rounded-2xl border border-line bg-white p-5 shadow-[0_1px_2px_rgba(15,20,30,0.04)] ${
         fitted ? 'flex min-h-[150px] flex-col short:p-4' : ''
       }`}
     >
-      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+      {dragActive && (
+        <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-2xl border-2 border-dashed border-ink/40 bg-white/90 text-sm font-medium text-ink">
+          Solte o arquivo para importar (PDF, DOCX ou TXT)
+        </div>
+      )}
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
         <label htmlFor={id} className="flex items-center gap-2 text-sm font-semibold text-ink">
           <Icon className="size-4" aria-hidden="true" />
           {label}
         </label>
-        <span className="text-xs text-muted tabular-nums" aria-live="polite">
-          {chars.toLocaleString('pt-BR')} caracteres · {words.toLocaleString('pt-BR')} palavras
-        </span>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <span className="text-xs text-muted tabular-nums" aria-live="polite">
+            {chars.toLocaleString('pt-BR')} caracteres · {words.toLocaleString('pt-BR')} palavras
+          </span>
+          {headerAction}
+        </div>
       </div>
       {/* Em telas baixas com a coluna fixa, a explicação some da tela (continua para leitores de tela). */}
       <p id={`${id}-hint`} className={`mt-1 text-xs text-muted ${fitted ? 'short:sr-only' : ''}`}>
@@ -217,6 +256,7 @@ export function InputSection({
 }: InputSectionProps) {
   const fieldsRef = useRef<HTMLDivElement>(null);
   const [split, setSplit] = useState(DEFAULT_SPLIT);
+  const { importing, importFile } = useResumeImport(resumeText, onResumeChange);
 
   const isReady = jobText.trim().length >= MIN_CHARS && resumeText.trim().length >= MIN_CHARS;
   const hasContent = jobText.length > 0 || resumeText.length > 0;
@@ -256,7 +296,7 @@ export function InputSection({
         <TextField
           id="current-resume"
           label="Currículo Atual"
-          description="Cole a íntegra do seu currículo em texto. Títulos como Resumo, Experiência e Formação ajudam na reestruturação."
+          description="Importe o arquivo (PDF, DOCX ou TXT), arraste-o até aqui ou cole o texto. Títulos como Resumo, Experiência e Formação ajudam na reestruturação."
           placeholder="Ex.: Nome Sobrenome — Desenvolvedora Front-end — e-mail | telefone | LinkedIn..."
           icon={UserRound}
           value={resumeText}
@@ -264,6 +304,8 @@ export function InputSection({
           fitted={fitted}
           autoGrow={autoGrow}
           style={fitted ? { flex: `${1 - split} 1 0px` } : undefined}
+          headerAction={<ResumeImportButton importing={importing} onFile={importFile} />}
+          onFileDrop={importFile}
           onChange={onResumeChange}
         />
       </div>

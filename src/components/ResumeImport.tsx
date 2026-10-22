@@ -1,0 +1,75 @@
+import { FileUp, LoaderCircle } from 'lucide-react';
+import { useRef, useState } from 'react';
+import { ACCEPTED_RESUME_FILES, ResumeImportError, readResumeFile } from '../utils/fileImport';
+import { buttonStyles } from './buttonStyles';
+import { useToast } from './Toast';
+
+/** Lê o arquivo do currículo e preenche o campo, com confirmação antes de substituir texto já digitado. */
+export function useResumeImport(currentText: string, onImported: (text: string) => void) {
+  const showToast = useToast();
+  const [importing, setImporting] = useState(false);
+
+  const importFile = async (file: File) => {
+    if (importing) return;
+    if (currentText.trim() && !window.confirm('Substituir o texto atual do currículo pelo conteúdo do arquivo?')) return;
+
+    setImporting(true);
+    try {
+      const text = await readResumeFile(file);
+      onImported(text);
+      showToast(`Currículo importado de "${file.name}". Confira o texto antes de analisar.`);
+    } catch (error) {
+      showToast(
+        error instanceof ResumeImportError ? error.message : 'Não foi possível ler o arquivo. Tente salvá-lo em outro formato.',
+        'error',
+      );
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  return { importing, importFile };
+}
+
+interface ResumeImportButtonProps {
+  importing: boolean;
+  onFile: (file: File) => void;
+}
+
+export function ResumeImportButton({ importing, onFile }: ResumeImportButtonProps) {
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => inputRef.current?.click()}
+        disabled={importing}
+        aria-busy={importing}
+        title="PDF, DOCX ou TXT. O arquivo é lido no seu navegador e não é enviado a lugar nenhum."
+        className={buttonStyles.small}
+      >
+        {importing ? (
+          <LoaderCircle className="size-3.5 animate-spin" aria-hidden="true" />
+        ) : (
+          <FileUp className="size-3.5" aria-hidden="true" />
+        )}
+        {importing ? 'Lendo arquivo…' : 'Importar PDF ou Word'}
+      </button>
+      <input
+        ref={inputRef}
+        type="file"
+        accept={ACCEPTED_RESUME_FILES}
+        className="hidden"
+        tabIndex={-1}
+        aria-hidden="true"
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          // Limpa a seleção para permitir importar o mesmo arquivo de novo.
+          event.target.value = '';
+          if (file) onFile(file);
+        }}
+      />
+    </>
+  );
+}
