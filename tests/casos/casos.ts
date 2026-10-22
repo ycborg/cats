@@ -167,6 +167,52 @@ Ensino Médio — Escola Estadual | 2012`,
     formacaoNoCurriculo: 'medio',
   },
   {
+    nome: '"solid experience" não é o princípio SOLID; "SOLID" em maiúsculas é',
+    vaga: `Software Engineer
+Requirements
+- Solid experience with Java. Solid knowledge of SQL.
+- Strong grasp of solid design and testing.`,
+    curriculo: `Leo Martins
+Software Engineer
+leo@email.com | (11) 94444-5555
+
+Experience
+Software Engineer — Company | jan/2020 – atual
+- Solid background in Java and SQL.`,
+    nuncaPalavrasChave: ['SOLID'],
+    palavrasChave: ['Java', 'SQL'],
+  },
+  {
+    nome: 'Princípios SOLID escritos em maiúsculas continuam sendo reconhecidos',
+    vaga: `Desenvolvedor Back-end
+Requisitos
+- Conhecimento em SOLID e Clean Code.`,
+    curriculo: `Leo Martins
+Desenvolvedor Back-end
+leo@email.com | (11) 94444-5555
+
+Experiência
+Desenvolvedor Back-end — Empresa | jan/2020 – atual
+- Apliquei SOLID em serviços Java.`,
+    palavrasChave: ['SOLID'],
+    encontradas: ['SOLID'],
+  },
+  {
+    nome: 'Currículo com "solid" minúsculo não conta como o princípio SOLID',
+    vaga: `Desenvolvedor Back-end
+Requisitos
+- Conhecimento em SOLID e Clean Code.`,
+    curriculo: `Leo Martins
+Desenvolvedor Back-end
+leo@email.com | (11) 94444-5555
+
+Experiência
+Desenvolvedor Back-end — Empresa | jan/2020 – atual
+- Solid background in clean code.`,
+    faltando: ['SOLID'],
+    encontradas: ['Clean Code'],
+  },
+  {
     nome: 'Anos exigidos: a exigência principal é a maior ("5 anos em TI, sendo 2 com React")',
     vaga: `Desenvolvedor Front-end
 Requisitos

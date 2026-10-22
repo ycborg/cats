@@ -22,9 +22,8 @@ describe('nenhuma stopword vira palavra-chave, mesmo repetida', () => {
 /**
  * Palavras que também são termos do dicionário: o dicionário vence. Cada item aqui é um conflito
  * conhecido, anotado de propósito. Ao resolver um deles, remova-o da lista.
- * - "solid": adjetivo em inglês ("solid experience") × princípios SOLID (programação).
  */
-const CONFLITOS_CONHECIDOS = new Set(['solid']);
+const CONFLITOS_CONHECIDOS = new Set<string>([]);
 
 describe('nenhuma palavra genérica de vaga (ruído) vira palavra-chave, mesmo repetida', () => {
   test.each([...NOISE_WORDS].filter((word) => !CONFLITOS_CONHECIDOS.has(word)))('"%s"', (word) => {
