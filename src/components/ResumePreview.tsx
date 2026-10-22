@@ -1,9 +1,12 @@
-import { Check, Copy, FileDown, LoaderCircle, PencilLine, RotateCcw } from 'lucide-react';
+import { Check, Copy, PencilLine, RotateCcw } from 'lucide-react';
 import { memo, useEffect, useRef, useState } from 'react';
 import { useTransientFlag } from '../hooks/useTransientFlag';
 import type { AtsResume, ResumeLine } from '../types/ats';
 import { copyToClipboard, serializeResume } from '../utils/clipboard';
+import { buildResumeDocx, buildResumeText, downloadBlob, resumeFileName } from '../utils/resumeExport';
 import { buttonStyles } from './buttonStyles';
+import type { ExportFormat } from './ExportMenu';
+import { ExportMenu } from './ExportMenu';
 import { useToast } from './Toast';
 
 type LineGroup = { kind: 'bullets'; items: ResumeLine[] } | { kind: 'single'; line: ResumeLine };
@@ -70,6 +73,7 @@ function ResumePreviewComponent({ resume }: { resume: AtsResume }) {
   const [version, setVersion] = useState(0);
   const [isEdited, setIsEdited] = useState(false);
   const [isPrinting, setIsPrinting] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const [copied, flashCopied] = useTransientFlag();
   const [restored, flashRestored] = useTransientFlag();
 
@@ -108,6 +112,25 @@ function ResumePreviewComponent({ resume }: { resume: AtsResume }) {
     }, PRINT_DELAY_MS);
   };
 
+  const handleExport = async (format: ExportFormat) => {
+    if (format === 'pdf') {
+      handlePrint();
+      return;
+    }
+    const sheet = sheetRef.current;
+    if (!sheet) return;
+    setIsExporting(true);
+    try {
+      const blob = format === 'docx' ? await buildResumeDocx(sheet) : buildResumeText(sheet);
+      downloadBlob(blob, resumeFileName(sheet, format));
+      showToast(format === 'docx' ? 'Currículo exportado em Word (.docx).' : 'Currículo exportado em texto (.txt).');
+    } catch {
+      showToast('Não foi possível gerar o arquivo. Tente novamente.', 'error');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   return (
     <div>
       <div className="flex flex-wrap items-center justify-between gap-3 print:hidden">
@@ -116,7 +139,7 @@ function ResumePreviewComponent({ resume }: { resume: AtsResume }) {
           {isEdited ? (
             <span>
               <span className="mr-1.5 rounded-full bg-amber-50 px-2 py-0.5 font-medium text-amber-800">Editado</span>
-              Suas alterações serão incluídas na cópia e no PDF.
+              Suas alterações serão incluídas na cópia e na exportação.
             </span>
           ) : (
             'Clique no texto da folha para editar antes de exportar.'
@@ -141,20 +164,7 @@ function ResumePreviewComponent({ resume }: { resume: AtsResume }) {
             {copied ? <Check className="size-4" aria-hidden="true" /> : <Copy className="size-4" aria-hidden="true" />}
             {copied ? 'Copiado!' : 'Copiar texto'}
           </button>
-          <button
-            type="button"
-            onClick={handlePrint}
-            disabled={isPrinting}
-            aria-busy={isPrinting}
-            className={`${buttonStyles.primaryCompact} min-w-[140px]`}
-          >
-            {isPrinting ? (
-              <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
-            ) : (
-              <FileDown className="size-4" aria-hidden="true" />
-            )}
-            {isPrinting ? 'Abrindo…' : 'Exportar PDF'}
-          </button>
+          <ExportMenu busy={isPrinting || isExporting} onExport={handleExport} />
         </div>
       </div>
 
