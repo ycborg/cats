@@ -1,5 +1,6 @@
 import { FileUp, LoaderCircle } from 'lucide-react';
 import { useRef, useState } from 'react';
+import type { ImportedResume } from '../utils/fileImport';
 import { ACCEPTED_RESUME_FILES, ResumeImportError, readResumeFile } from '../utils/fileImport';
 import { buttonStyles } from './buttonStyles';
 import { useToast } from './Toast';
@@ -8,7 +9,11 @@ import { useToast } from './Toast';
  * Lê o arquivo do currículo e preenche o campo. Se já havia texto, ele é substituído sem perguntar,
  * e o aviso de sucesso oferece "Desfazer" para recuperá-lo.
  */
-export function useResumeImport(currentText: string, onImported: (text: string) => void) {
+export function useResumeImport(
+  currentText: string,
+  onImported: (text: string) => void,
+  onFileRead?: (imported: ImportedResume) => void,
+) {
   const showToast = useToast();
   const [importing, setImporting] = useState(false);
 
@@ -18,8 +23,9 @@ export function useResumeImport(currentText: string, onImported: (text: string) 
 
     setImporting(true);
     try {
-      const text = await readResumeFile(file);
-      onImported(text);
+      const imported = await readResumeFile(file);
+      onImported(imported.text);
+      onFileRead?.(imported);
       showToast(
         `Currículo importado de "${file.name}". Confira o texto antes de analisar.`,
         'success',

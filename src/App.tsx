@@ -13,6 +13,8 @@ import { MATCH_LEVEL_LABEL, analyzeResume } from './utils/atsAnalyzer';
 import type { SampleId } from './utils/sampleData';
 import { SAMPLES } from './utils/sampleData';
 import { loadDraft, saveDraft } from './utils/draftStorage';
+import type { ImportedResume } from './utils/fileImport';
+import { isFromImportedFile } from './utils/fileImport';
 
 /** A análise é instantânea; o atraso existe só para o feedback visual do estado de carregamento. */
 const ANALYSIS_DELAY_MS = 1100;
@@ -26,6 +28,7 @@ export default function App() {
   const [initialDraft] = useState(loadDraft);
   const [jobText, setJobText] = useState(initialDraft.jobText);
   const [resumeText, setResumeText] = useState(initialDraft.resumeText);
+  const [importedResume, setImportedResume] = useState<ImportedResume | null>(initialDraft.importedResume);
   const [status, setStatus] = useState<UiStatus>('idle');
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [runId, setRunId] = useState(0);
@@ -47,9 +50,9 @@ export default function App() {
 
   // Guarda o rascunho no navegador (com pequena espera, para não gravar a cada tecla).
   useEffect(() => {
-    const timer = window.setTimeout(() => saveDraft({ jobText, resumeText }), DRAFT_SAVE_DELAY_MS);
+    const timer = window.setTimeout(() => saveDraft({ jobText, resumeText, importedResume }), DRAFT_SAVE_DELAY_MS);
     return () => window.clearTimeout(timer);
-  }, [jobText, resumeText]);
+  }, [jobText, resumeText, importedResume]);
 
   const handleAnalyze = useCallback(() => {
     window.clearTimeout(timerRef.current);
@@ -58,14 +61,16 @@ export default function App() {
       resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
     timerRef.current = window.setTimeout(() => {
-      const analysis = analyzeResume(jobText, resumeText);
+      // O layout do arquivo só vale enquanto o texto do campo ainda for o que veio dele.
+      const fromFile = importedResume && isFromImportedFile(importedResume, resumeText) ? importedResume : null;
+      const analysis = analyzeResume(jobText, resumeText, { fileLayout: fromFile });
       setResult(analysis);
       setRunId((id) => id + 1);
       setStatus('success');
       flashAnalysisDone();
       showToast(`Análise concluída: ${analysis.score}% · ${MATCH_LEVEL_LABEL[analysis.level]}.`);
     }, ANALYSIS_DELAY_MS);
-  }, [jobText, resumeText, flashAnalysisDone, showToast]);
+  }, [jobText, resumeText, importedResume, flashAnalysisDone, showToast]);
 
   const handleLoadSample = useCallback(
     (id: SampleId) => {
@@ -73,6 +78,7 @@ export default function App() {
       if (!sample) return;
       setJobText(sample.job);
       setResumeText(sample.resume);
+      setImportedResume(null);
       flashSampleLoaded();
       showToast(`Exemplo de ${sample.area} carregado. Agora clique em "Analisar compatibilidade".`, 'info');
     },
@@ -83,6 +89,7 @@ export default function App() {
     window.clearTimeout(timerRef.current);
     setJobText('');
     setResumeText('');
+    setImportedResume(null);
     setResult(null);
     setStatus('idle');
     showToast('Campos limpos. Pronto para uma nova análise.', 'info');
@@ -111,6 +118,7 @@ export default function App() {
               autoGrow={!isTwoColumns}
               onJobChange={setJobText}
               onResumeChange={setResumeText}
+              onResumeImported={setImportedResume}
               onLoadSample={handleLoadSample}
               onClear={handleClear}
               onAnalyze={handleAnalyze}
