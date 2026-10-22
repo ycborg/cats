@@ -43,13 +43,15 @@ export function useResumeImport(currentText: string, onImported: (text: string) 
  * texto, que escurecem junto com ele no hover.
  */
 function CornerFrame() {
-  const corner = 'pointer-events-none absolute size-2.5 border-current';
+  const corner = 'absolute size-2.5 border-current';
+  // Posicionada sobre o botão inteiro (absolute inset-0): fica fora do fluxo do flex, então não
+  // desloca o ícone e o texto, que ficam centralizados.
   return (
-    <span aria-hidden="true">
-      <span className={`${corner} top-0 left-0 rounded-tl-md border-t-[1.5px] border-l-[1.5px]`} />
-      <span className={`${corner} top-0 right-0 rounded-tr-md border-t-[1.5px] border-r-[1.5px]`} />
-      <span className={`${corner} bottom-0 left-0 rounded-bl-md border-b-[1.5px] border-l-[1.5px]`} />
-      <span className={`${corner} right-0 bottom-0 rounded-br-md border-r-[1.5px] border-b-[1.5px]`} />
+    <span aria-hidden="true" className="pointer-events-none absolute inset-0">
+      <span className={`${corner} top-0 left-0 rounded-tl-md border-t-2 border-l-2`} />
+      <span className={`${corner} top-0 right-0 rounded-tr-md border-t-2 border-r-2`} />
+      <span className={`${corner} bottom-0 left-0 rounded-bl-md border-b-2 border-l-2`} />
+      <span className={`${corner} right-0 bottom-0 rounded-br-md border-r-2 border-b-2`} />
     </span>
   );
 }
