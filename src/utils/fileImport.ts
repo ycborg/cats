@@ -50,8 +50,15 @@ interface PositionedText {
   height: number;
 }
 
+/** Linha reconstruída, com as bordas horizontais (para detectar frases que quebraram na margem). */
+interface PositionedLine {
+  text: string;
+  left: number;
+  right: number;
+}
+
 /** Reconstrói as linhas a partir das posições dos trechos de texto da página. */
-function pageToLines(items: PositionedText[]): string[] {
+function pageToLines(items: PositionedText[]): PositionedLine[] {
   const sorted = [...items].sort((a, b) => b.y - a.y || a.x - b.x);
   const lines: PositionedText[][] = [];
   for (const item of sorted) {
@@ -73,23 +80,40 @@ function pageToLines(items: PositionedText[]): string[] {
       text += (needsSpace ? ' ' : '') + item.text;
       previousEnd = item.x + item.width;
     }
-    return text;
+    return { text, left: ordered[0]?.x ?? 0, right: previousEnd ?? 0 };
   });
 }
 
+/** Linhas de contato (e-mail, site, perfil) costumam começar com minúscula, mas nunca são continuação. */
+const CONTACT_LINE = /@|https?:\/\/|www\.|linkedin|github|behance|\|/i;
+/** A linha anterior precisa ter ido quase até a margem direita para ser uma frase que quebrou. */
+const WRAP_WIDTH_RATIO = 0.6;
+
 /**
- * No PDF, uma frase longa quebra em várias linhas visuais. Junta a linha seguinte à anterior quando
- * ela começa com letra minúscula (continuação da frase), para não picotar parágrafos e conquistas.
+ * No PDF, uma frase longa quebra em várias linhas visuais. Junta a linha seguinte à anterior quando:
+ * ela começa com letra minúscula, a anterior chegou perto da margem direita e não terminou com
+ * pontuação, e nenhuma das duas é uma linha de contato. Assim parágrafos e conquistas não ficam
+ * picotados, e cabeçalho/contatos continuam em linhas separadas.
  */
-function joinWrappedLines(lines: string[]): string[] {
-  const joined: string[] = [];
+function joinWrappedLines(lines: PositionedLine[]): string[] {
+  const rightEdge = Math.max(0, ...lines.map((line) => line.right));
+  const leftEdge = Math.min(...lines.map((line) => line.left));
+  const wrapThreshold = leftEdge + (rightEdge - leftEdge) * WRAP_WIDTH_RATIO;
+
+  const joined: PositionedLine[] = [];
   for (const line of lines) {
     const previous = joined[joined.length - 1];
-    const continues = previous !== undefined && /^\p{Ll}/u.test(line) && !/[:.!?;]$/.test(previous);
-    if (continues) joined[joined.length - 1] = `${previous} ${line}`;
+    const continues =
+      previous !== undefined &&
+      /^\p{Ll}/u.test(line.text) &&
+      !/[:.!?;]$/.test(previous.text) &&
+      previous.right >= wrapThreshold &&
+      !CONTACT_LINE.test(line.text) &&
+      !CONTACT_LINE.test(previous.text);
+    if (continues) joined[joined.length - 1] = { ...previous, text: `${previous.text} ${line.text}`, right: line.right };
     else joined.push(line);
   }
-  return joined;
+  return joined.map((line) => line.text);
 }
 
 async function readPdf(buffer: ArrayBuffer): Promise<string> {
