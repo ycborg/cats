@@ -82,7 +82,7 @@ function TextField({
     <div
       style={style}
       className={`rounded-2xl border border-line bg-white p-5 shadow-[0_1px_2px_rgba(15,20,30,0.04)] ${
-        fitted ? 'flex min-h-[190px] flex-col' : ''
+        fitted ? 'flex min-h-[150px] flex-col short:p-4' : ''
       }`}
     >
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
@@ -94,7 +94,8 @@ function TextField({
           {chars.toLocaleString('pt-BR')} caracteres · {words.toLocaleString('pt-BR')} palavras
         </span>
       </div>
-      <p id={`${id}-hint`} className="mt-1 text-xs text-muted">
+      {/* Em telas baixas com a coluna fixa, a explicação some da tela (continua para leitores de tela). */}
+      <p id={`${id}-hint`} className={`mt-1 text-xs text-muted ${fitted ? 'short:sr-only' : ''}`}>
         {description}
       </p>
       {/*

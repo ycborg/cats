@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* Telas baixas (ex.: notebooks): a coluna fixa de entrada fica mais compacta para caber inteira. */
+@custom-variant short (@media (max-height: 760px));
+
 @theme {
   --font-brand: "JetBrains Mono", ui-monospace, "SFMono-Regular", Consolas, monospace;
   --font-sans: "Inter", "Geist Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
