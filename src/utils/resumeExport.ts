@@ -1,12 +1,11 @@
-import { serializeResume } from './clipboard';
+import { stripControlChars } from './fileImport';
+import { blockText, serializeResume, sheetLeaves } from './resumeSheet';
 
 /**
  * Exportação do currículo gerado (com as edições feitas na folha) para Word (.docx) e texto (.txt),
  * 100% no navegador. O .docx é montado do zero: Arial, A4, títulos de seção com linha inferior e
  * marcadores em texto ("•"), formato simples que os ATS leem bem.
  */
-
-const BLOCK_SELECTOR = 'h1,h2,h3,p,li,div';
 
 type BlockKind = 'name' | 'header' | 'section' | 'subheading' | 'bullet' | 'paragraph';
 
@@ -17,10 +16,9 @@ interface Block {
 
 /** Lê os blocos da folha (mesmo critério do "Copiar texto": só os blocos "folha", sem filhos). */
 function readBlocks(root: HTMLElement): Block[] {
-  return Array.from(root.querySelectorAll<HTMLElement>(BLOCK_SELECTOR))
-    .filter((element) => !element.querySelector(BLOCK_SELECTOR))
+  return sheetLeaves(root)
     .map((element): Block | null => {
-      const text = element.innerText.replace(/\s+/g, ' ').trim();
+      const text = blockText(element);
       if (!text) return null;
       const inHeader = Boolean(element.closest('header'));
       switch (element.tagName) {
@@ -39,8 +37,9 @@ function readBlocks(root: HTMLElement): Block[] {
     .filter((block): block is Block => block !== null);
 }
 
+/** Caracteres de controle não existem em XML 1.0: o Word recusa o arquivo, então saem junto com o escape. */
 const escapeXml = (value: string): string =>
-  value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  stripControlChars(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
 /** Tamanhos em meios-pontos (padrão do Word): 21 = 10,5pt. */
 const SIZE = { name: 36, header: 20, section: 22, body: 21 } as const;
@@ -84,13 +83,13 @@ const SECTION = '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1134
 export async function buildResumeDocx(root: HTMLElement): Promise<Blob> {
   const { zipSync, strToU8 } = await import('fflate');
   const body = readBlocks(root).map(paragraphXml).join('');
-  const document = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+  const documentXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>${body}${SECTION}</w:body></w:document>`;
 
   const zip = zipSync({
     '[Content_Types].xml': strToU8(CONTENT_TYPES),
     '_rels/.rels': strToU8(ROOT_RELS),
-    'word/document.xml': strToU8(document),
+    'word/document.xml': strToU8(documentXml),
     'word/_rels/document.xml.rels': strToU8(DOCUMENT_RELS),
     'word/styles.xml': strToU8(STYLES),
   });
@@ -105,7 +104,8 @@ export function buildResumeText(root: HTMLElement): Blob {
 /** Nome do arquivo a partir do nome da pessoa: "Curriculo - Mariana Costa.docx". */
 export function resumeFileName(root: HTMLElement, extension: 'docx' | 'txt'): string {
   const name = root.querySelector('h1')?.innerText.replace(/\s+/g, ' ').trim() ?? '';
-  const safeName = name.replace(/[\\/:*?"<>|]/g, '').slice(0, 60);
+  // Corta por pontos de código para não partir um emoji ao meio.
+  const safeName = Array.from(name.replace(/[\\/:*?"<>|]/g, '')).slice(0, 60).join('');
   return `${safeName ? `Curriculo - ${safeName}` : 'Curriculo'}.${extension}`;
 }
 

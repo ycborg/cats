@@ -10,6 +10,9 @@ export const ACCEPTED_RESUME_FILES =
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
 /** Abaixo disso, o PDF provavelmente é uma imagem escaneada (sem texto selecionável). */
 const MIN_EXTRACTED_CHARS = 40;
+/** Limite do document.xml já descompactado (proteção contra "bomba" de zip: 10 MB compactados podem virar GBs). */
+const MAX_DOCX_XML_BYTES = 20 * 1024 * 1024;
+const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 
 /** Texto extraído do arquivo e o que foi possível observar do layout original. */
 export interface ImportedResume {
@@ -28,15 +31,23 @@ type FileKind = 'pdf' | 'docx' | 'txt' | 'doc' | 'unknown';
 function detectKind(file: File): FileKind {
   const name = file.name.toLowerCase();
   if (name.endsWith('.pdf') || file.type === 'application/pdf') return 'pdf';
-  if (name.endsWith('.docx')) return 'docx';
+  if (name.endsWith('.docx') || file.type === DOCX_MIME) return 'docx';
   if (name.endsWith('.doc')) return 'doc';
   if (name.endsWith('.txt') || file.type === 'text/plain') return 'txt';
   return 'unknown';
 }
 
-/** Limpa espaços sobrando e excesso de linhas em branco. */
+/**
+ * Remove caracteres de controle que o XML 1.0 não admite (U+0000–U+0008, U+000B, U+000C, U+000E–U+001F,
+ * U+FFFE e U+FFFF). Mantém tab, quebra de linha e retorno de carro.
+ */
+// eslint-disable-next-line no-control-regex
+const CONTROL_CHARS = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]/g;
+export const stripControlChars = (text: string): string => text.replace(CONTROL_CHARS, '');
+
+/** Limpa espaços sobrando, caracteres de controle e excesso de linhas em branco. */
 function tidy(text: string): string {
-  return text
+  return stripControlChars(text)
     .replace(/ /g, ' ')
     .split('\n')
     .map((line) => line.replace(/[ \t]+/g, ' ').trim())
@@ -171,37 +182,45 @@ async function readPdf(buffer: ArrayBuffer): Promise<ImportedResume> {
   pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
 
   const loadingTask = pdfjs.getDocument({ data: new Uint8Array(buffer) });
-  let document;
   try {
-    document = await loadingTask.promise;
-  } catch (error) {
-    if (error instanceof Error && error.name === 'PasswordException') {
-      throw new ResumeImportError('Este PDF está protegido por senha. Gere uma versão sem senha e tente de novo.');
+    let pdf;
+    try {
+      pdf = await loadingTask.promise;
+    } catch (error) {
+      if (error instanceof Error && error.name === 'PasswordException') {
+        throw new ResumeImportError('Este PDF está protegido por senha. Gere uma versão sem senha e tente de novo.');
+      }
+      throw new ResumeImportError('Não foi possível abrir este PDF. Ele pode estar corrompido.');
     }
-    throw new ResumeImportError('Não foi possível abrir este PDF. Ele pode estar corrompido.');
-  }
 
-  const pages: string[] = [];
-  let multiColumn = false;
-  for (let pageNumber = 1; pageNumber <= document.numPages; pageNumber += 1) {
-    const page = await document.getPage(pageNumber);
-    const content = await page.getTextContent();
-    const items: PositionedText[] = [];
-    for (const item of content.items) {
-      if (!('str' in item) || !item.str.trim()) continue;
-      items.push({
-        text: item.str,
-        x: item.transform[4] ?? 0,
-        y: item.transform[5] ?? 0,
-        width: item.width,
-        height: item.height || Math.abs(item.transform[3] ?? 10),
-      });
+    const pages: string[] = [];
+    let multiColumn = false;
+    try {
+      for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+        const page = await pdf.getPage(pageNumber);
+        const content = await page.getTextContent();
+        const items: PositionedText[] = [];
+        for (const item of content.items) {
+          if (!('str' in item) || !item.str.trim()) continue;
+          items.push({
+            text: item.str,
+            x: item.transform[4] ?? 0,
+            y: item.transform[5] ?? 0,
+            width: item.width,
+            height: item.height || Math.abs(item.transform[3] ?? 10),
+          });
+        }
+        if (!multiColumn && hasMultipleColumns(items)) multiColumn = true;
+        pages.push(joinWrappedLines(pageToLines(items)).join('\n'));
+      }
+    } catch {
+      throw new ResumeImportError('Não foi possível ler o texto deste PDF. Ele pode estar corrompido; tente exportá-lo de novo.');
     }
-    if (!multiColumn && hasMultipleColumns(items)) multiColumn = true;
-    pages.push(joinWrappedLines(pageToLines(items)).join('\n'));
+    return { text: pages.join('\n\n'), multiColumn };
+  } finally {
+    // Libera o worker e a memória do pdf.js mesmo quando a leitura falha no meio.
+    await loadingTask.destroy().catch(() => undefined);
   }
-  await loadingTask.destroy();
-  return { text: pages.join('\n\n'), multiColumn };
 }
 
 /* ---------------------------------------------------------------------------
@@ -235,16 +254,45 @@ export function docxHasColumns(xml: Document): boolean {
   });
 }
 
+/** Lê o .txt: UTF-8 (com ou sem BOM), UTF-16 com BOM, ou Windows-1252 quando não for UTF-8 válido. */
+async function readText(file: File): Promise<string> {
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  if (bytes[0] === 0xff && bytes[1] === 0xfe) return new TextDecoder('utf-16le').decode(bytes.subarray(2));
+  if (bytes[0] === 0xfe && bytes[1] === 0xff) return new TextDecoder('utf-16be').decode(bytes.subarray(2));
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+  } catch {
+    return new TextDecoder('windows-1252').decode(bytes);
+  }
+}
+
 async function readDocx(buffer: ArrayBuffer): Promise<ImportedResume> {
   const { unzipSync, strFromU8 } = await import('fflate');
   let files;
+  let tooBig = false;
   try {
-    files = unzipSync(new Uint8Array(buffer), { filter: (file) => file.name === 'word/document.xml' });
+    files = unzipSync(new Uint8Array(buffer), {
+      filter: (file) => {
+        if (file.name !== 'word/document.xml') return false;
+        // Recusa antes de descompactar: o tamanho declarado no zip já denuncia a "bomba".
+        if (file.originalSize > MAX_DOCX_XML_BYTES) {
+          tooBig = true;
+          return false;
+        }
+        return true;
+      },
+    });
   } catch {
     throw new ResumeImportError('Não foi possível abrir este arquivo do Word. Ele pode estar corrompido.');
   }
+  if (tooBig) {
+    throw new ResumeImportError('O conteúdo deste arquivo do Word é grande demais para um currículo (limite de 20 MB descompactado).');
+  }
   const xmlBytes = files['word/document.xml'];
   if (!xmlBytes) throw new ResumeImportError('Este arquivo não parece ser um documento do Word (.docx) válido.');
+  if (xmlBytes.length > MAX_DOCX_XML_BYTES) {
+    throw new ResumeImportError('O conteúdo deste arquivo do Word é grande demais para um currículo (limite de 20 MB descompactado).');
+  }
 
   const xml = new DOMParser().parseFromString(strFromU8(xmlBytes), 'application/xml');
   const lines: string[] = [];
@@ -284,7 +332,7 @@ export async function readResumeFile(file: File): Promise<ImportedResume> {
 
   const extracted: ImportedResume =
     kind === 'txt'
-      ? { text: await file.text(), multiColumn: false }
+      ? { text: await readText(file), multiColumn: false }
       : kind === 'pdf'
         ? await readPdf(await file.arrayBuffer())
         : await readDocx(await file.arrayBuffer());
