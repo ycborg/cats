@@ -21,44 +21,44 @@ interface ExportMenuProps {
 
 /** Botão "Exportar ▾": abre as opções de formato (PDF, Word, texto). */
 export function ExportMenu({ busy, onExport }: ExportMenuProps) {
-  const menu = useDropdownMenu(MENU_WIDTH_PX);
-  const { close } = menu;
+  const { open, align, menuId, containerRef, buttonRef, setItemRef, close, toggle, onButtonKeyDown, onMenuKeyDown } =
+    useDropdownMenu(MENU_WIDTH_PX);
 
   return (
-    <div ref={menu.containerRef} className="relative">
+    <div ref={containerRef} className="relative">
       <button
-        ref={menu.buttonRef}
+        ref={buttonRef}
         type="button"
-        onClick={menu.toggle}
-        onKeyDown={menu.onButtonKeyDown}
+        onClick={toggle}
+        onKeyDown={onButtonKeyDown}
         disabled={busy}
         aria-busy={busy}
         aria-haspopup="menu"
-        aria-expanded={menu.open}
-        aria-controls={menu.menuId}
+        aria-expanded={open}
+        aria-controls={menuId}
         className={`${buttonStyles.primaryCompact} min-w-[140px]`}
       >
         {busy ? <LoaderCircle className="size-4 animate-spin" aria-hidden="true" /> : <FileDown className="size-4" aria-hidden="true" />}
         {busy ? 'Exportando…' : 'Exportar'}
         {!busy && (
-          <ChevronDown className={`size-4 transition-transform duration-200 ${menu.open ? 'rotate-180' : ''}`} aria-hidden="true" />
+          <ChevronDown className={`size-4 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} aria-hidden="true" />
         )}
       </button>
 
-      {menu.open && (
+      {open && (
         <div
-          id={menu.menuId}
+          id={menuId}
           role="menu"
           aria-label="Formatos de exportação"
-          onKeyDown={menu.onMenuKeyDown}
-          className={`absolute top-full z-30 mt-2 w-72 max-w-[calc(100vw-2rem)] animate-fade-up ${menu.align === 'right' ? 'right-0 origin-top-right' : 'left-0 origin-top-left'} rounded-xl border border-line bg-white p-1.5 shadow-[0_12px_32px_-12px_rgba(15,20,30,0.28)]`}
+          onKeyDown={onMenuKeyDown}
+          className={`absolute top-full z-30 mt-2 w-72 max-w-[calc(100vw-2rem)] animate-fade-up ${align === 'right' ? 'right-0 origin-top-right' : 'left-0 origin-top-left'} rounded-xl border border-line bg-white p-1.5 shadow-[0_12px_32px_-12px_rgba(15,20,30,0.28)]`}
         >
           {OPTIONS.map((option, index) => {
             const Icon = option.icon;
             return (
               <button
                 key={option.format}
-                ref={menu.setItemRef(index)}
+                ref={setItemRef(index)}
                 type="button"
                 role="menuitem"
                 tabIndex={-1}

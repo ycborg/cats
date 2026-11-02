@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
 import { strToU8, zipSync } from 'fflate';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
-import { serializeResume as serializeFromClipboard } from '../src/utils/clipboard';
 import { loadDraft, saveDraft } from '../src/utils/draftStorage';
 import { ResumeImportError, readResumeFile } from '../src/utils/fileImport';
 import { buildResumeDocx, resumeFileName } from '../src/utils/resumeExport';
@@ -164,9 +163,8 @@ describe('8. nome do arquivo com emoji', () => {
 });
 
 describe('9. leitura da folha centralizada', () => {
-  test('serializeResume continua exportado de clipboard e dá o mesmo texto', () => {
+  test('serializeResume lê a folha (texto simples)', () => {
     const root = sheet('Ana Lima');
-    expect(serializeFromClipboard(root)).toBe(serializeResume(root));
     expect(serializeResume(root)).toBe(`Ana Lima\nDesenvolvedora\n\nRESUMO\n${LONG_TEXT}`);
   });
 });

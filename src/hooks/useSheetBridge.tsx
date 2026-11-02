@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { createContext, useContext, useMemo, useRef } from 'react';
+import { createContext, useContext, useState } from 'react';
 
 /**
  * Ponte entre a folha editável do currículo (ResumePreview) e o App.
@@ -23,42 +23,39 @@ export interface SheetBridge {
 
 const SheetBridgeContext = createContext<SheetBridge | null>(null);
 
-function createSheetBridge(
-  unsaved: { current: boolean },
-  reader: { current: (() => string | null) | null },
-  pending: { current: string | null },
-): SheetBridge {
+function createSheetBridge(): SheetBridge {
+  let unsaved = false;
+  let reader: (() => string | null) | null = null;
+  let pending: string | null = null;
   return {
-    hasUnsavedEdits: () => unsaved.current,
+    hasUnsavedEdits: () => unsaved,
     setUnsavedEdits: (value) => {
-      unsaved.current = value;
+      unsaved = value;
     },
     registerReader: (read) => {
-      reader.current = read;
+      reader = read;
       // Sem folha na tela, não há o que perder.
-      if (!read) unsaved.current = false;
+      if (!read) unsaved = false;
     },
-    readEditedHtml: () => reader.current?.() ?? null,
+    readEditedHtml: () => reader?.() ?? null,
     setPendingHtml: (html) => {
-      pending.current = html;
+      pending = html;
     },
-    peekPendingHtml: () => pending.current,
+    peekPendingHtml: () => pending,
   };
 }
 
 /** Cria a ponte (uma por App) e o provider que a entrega à folha. */
 export function useSheetBridgeProvider() {
-  const unsaved = useRef(false);
-  const reader = useRef<(() => string | null) | null>(null);
-  const pending = useRef<string | null>(null);
-
-  return useMemo(() => {
-    const bridge = createSheetBridge(unsaved, reader, pending);
+  // O estado vive em variáveis da própria ponte (não em refs lidos na renderização).
+  const [value] = useState(() => {
+    const bridge = createSheetBridge();
     const Provider = ({ children }: { children: ReactNode }) => (
       <SheetBridgeContext.Provider value={bridge}>{children}</SheetBridgeContext.Provider>
     );
     return { bridge, Provider };
-  }, []);
+  });
+  return value;
 }
 
 /** Ponte da folha; fora do App (ex.: componente isolado) devolve null e a folha funciona sem ela. */
@@ -66,22 +63,46 @@ export function useSheetBridge(): SheetBridge | null {
   return useContext(SheetBridgeContext);
 }
 
+/** Tags que a folha do currículo usa. Qualquer outra vira o seu texto (ou some, se não tiver texto). */
+const ALLOWED_TAGS = new Set([
+  'HEADER', 'SECTION', 'ARTICLE', 'H1', 'H2', 'H3', 'P', 'UL', 'OL', 'LI', 'DIV', 'SPAN', 'B', 'STRONG', 'I', 'EM', 'U', 'BR',
+]);
+/** Elementos cujo conteúdo não é texto de currículo: somem por inteiro, sem virar texto visível. */
+const DROPPED_TAGS = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEMPLATE', 'TITLE', 'SVG', 'MATH', 'IFRAME', 'OBJECT', 'EMBED', 'TEXTAREA', 'SELECT']);
+
+function copySafe(source: Node, target: Node): void {
+  for (const child of Array.from(source.childNodes)) {
+    if (child.nodeType === Node.TEXT_NODE) {
+      target.appendChild(document.createTextNode(child.textContent ?? ''));
+    } else if (child instanceof Element) {
+      const tag = child.tagName.toUpperCase();
+      if (DROPPED_TAGS.has(tag)) continue;
+      if (ALLOWED_TAGS.has(tag)) {
+        // Elemento novo e vazio: nenhum atributo do original passa, só `class` (estilo da folha;
+        // não executa nada nem carrega recurso externo).
+        const clone = document.createElement(tag.toLowerCase());
+        const className = child.getAttribute('class');
+        if (className) clone.setAttribute('class', className);
+        copySafe(child, clone);
+        target.appendChild(clone);
+      } else {
+        // Tag desconhecida (a, img, font…): fica só o conteúdo de texto, sem atributos.
+        copySafe(child, target);
+      }
+    }
+    // Comentários e outros tipos de nó são descartados.
+  }
+}
+
 /**
- * Limpa um HTML guardado antes de reinjetá-lo na folha: mantém conteúdo e estrutura, sem scripts,
- * manipuladores de evento (`onerror=`…) nem links `javascript:`. O texto colado na folha pode ter
- * vindo de qualquer lugar.
+ * Reconstrói o HTML guardado da folha por lista de PERMISSÃO antes de reinjetá-lo: só as tags e o
+ * atributo `class` acima, e texto. O texto colado na folha pode ter vindo de qualquer lugar, então
+ * nada do original (atributos, esquemas de URL, SVG, estilos) é copiado — apenas o que é permitido.
  */
 export function sanitizeSheetHtml(html: string): string {
   const template = document.createElement('template');
   template.innerHTML = html;
-  template.content
-    .querySelectorAll('script, style, iframe, object, embed, link, meta, base, form')
-    .forEach((node) => node.remove());
-  template.content.querySelectorAll('*').forEach((element) => {
-    for (const attribute of Array.from(element.attributes)) {
-      const value = attribute.value.trim().toLowerCase();
-      if (attribute.name.startsWith('on') || value.startsWith('javascript:')) element.removeAttribute(attribute.name);
-    }
-  });
-  return template.innerHTML;
+  const output = document.createElement('div');
+  copySafe(template.content, output);
+  return output.innerHTML;
 }

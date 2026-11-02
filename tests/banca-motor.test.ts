@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import type { AnalysisResult, ResumeSectionId } from '../src/types/ats';
 import { analyzeResume } from '../src/utils/atsAnalyzer';
+import { findWritten } from '../src/utils/keywordAnalyzer';
 import { EMAIL } from '../src/utils/patterns';
 import { SAMPLES } from '../src/utils/sampleData';
 import { stripAccents, termKey } from '../src/utils/textProcessing';
@@ -162,3 +163,82 @@ describe.each(SAMPLES.map((sample) => [sample.area, sample] as const))('exemplo 
     expect(invented).toEqual([]);
   });
 });
+
+describe('retrabalho: negação vale para a lista inteira', () => {
+  const job = 'Dev\nRequisitos\n- Java\n- Docker\n- Kubernetes\n- AWS';
+  /** Sem seção de resumo: o resumo automático também não pode citar o que foi negado. */
+  const withLine = (line: string) => `Ana Lima\nExperiência\nDesenvolvedora | Empresa A | 2020 – atual\n- ${line}`;
+  const generated = (result: AnalysisResult) => `${sectionText(result, 'skills')}\n${sectionText(result, 'summary')}`;
+
+  test.each([
+    ['Não tenho experiência com Java, Docker e Kubernetes.', ['Java', 'Docker', 'Kubernetes']],
+    ['Sem experiência: Java, Docker.', ['Java', 'Docker']],
+    ['Sem conhecimentos em AWS.', ['AWS']],
+    ['Sem experiências com AWS.', ['AWS']],
+    ['Sem vivências em AWS.', ['AWS']],
+  ])('"%s"', (line, negated) => {
+    const result = analyzeResume(job, withLine(line));
+    for (const term of negated) {
+      expect(generated(result), term).not.toMatch(new RegExp(`\\b${term}\\b`, 'i'));
+      expect(foundKeys(result)).not.toContain(termKey(term));
+    }
+  });
+
+  test('a negação termina no ponto final e no contraste', () => {
+    const result = analyzeResume(job, withLine('Sem experiência com Java, mas uso Docker. Kubernetes em produção.'));
+    expect(foundKeys(result)).not.toContain(termKey('Java'));
+    expect(foundKeys(result)).toEqual(expect.arrayContaining([termKey('Docker'), termKey('Kubernetes')]));
+  });
+
+  test('"não só X, mas também Y e Z" continua não sendo negação', () => {
+    const result = analyzeResume(job, withLine('Não só Java, mas também Docker e Kubernetes.'));
+    expect(foundKeys(result)).toEqual(expect.arrayContaining([termKey('Java'), termKey('Docker'), termKey('Kubernetes')]));
+  });
+});
+
+describe('retrabalho: título de habilidades dentro da experiência', () => {
+  const resume = `Ana Lima
+Experiência
+Desenvolvedora | Empresa A | 2021 - atual
+- Criei APIs de pagamento
+Tecnologias utilizadas:
+- Java, Spring
+Analista | Empresa B | 2018 - 2021
+Mantive sistemas legados`;
+
+  test('o cargo seguinte volta para o histórico e nada se perde', () => {
+    const result = analyzeResume('Dev\nRequisitos\n- Kubernetes', resume);
+    const experience = sectionText(result, 'experience');
+    expect(experience).toContain('Analista | Empresa B | 2018 - 2021');
+    expect(experience).toContain('Mantive sistemas legados');
+    expect(experience).toContain('Java, Spring');
+    expect(sectionText(result, 'skills')).not.toMatch(/Analista|Empresa B|legados/);
+    const sheet = normalize(sheetText(result));
+    for (const line of resume.split('\n').slice(2)) {
+      expect(sheet, line).toContain(normalize(line.replace(/^- /, '').replace(/:$/, '')));
+    }
+  });
+
+  test('seção de cursos de verdade, depois da experiência, continua em formação', () => {
+    const result = analyzeResume(
+      'Dev\nRequisitos\n- Kubernetes',
+      'Ana Lima\nExperiência\nDesenvolvedora | Empresa A | 2021 - atual\nCursos\nReact Avançado | Alura | 2022',
+    );
+    expect(sectionText(result, 'education')).toContain('React Avançado | Alura | 2022');
+    expect(sectionText(result, 'experience')).not.toContain('Alura');
+  });
+});
+
+test('retrabalho: "mensal" não vira competência no exemplo de Finanças', () => {
+  const finance = SAMPLES.find((sample) => sample.id === 'finance')!;
+  const result = analyzeResume(finance.job, finance.resume);
+  expect(sectionText(result, 'skills')).not.toMatch(/\bMensal\b/);
+});
+
+test('retrabalho: grafia do termo respeita fronteira de palavra ("Mysql" não serve para "SQL")', () => {
+  expect(findWritten('Bancos Mysql', 'sql')).toBeNull();
+  expect(findWritten('Bancos Mysql e SQL Server', 'sql')).toBe('SQL');
+  expect(findWritten('Node.js e React', 'node.js')).toBe('Node.js');
+  expect(findWritten('C# e C++', 'c#')).toBe('C#');
+});
+

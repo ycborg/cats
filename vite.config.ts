@@ -25,13 +25,16 @@ const CSP = [
 const cspPlugin = (): Plugin => ({
   name: 'cats-csp',
   apply: 'build',
-  transformIndexHtml: () => [
-    {
-      tag: 'meta',
-      attrs: { 'http-equiv': 'Content-Security-Policy', content: CSP },
-      injectTo: 'head-prepend',
-    },
-  ],
+  // Substitui logo após o <meta charset> (que deve vir primeiro) e antes de qualquer
+  // script/link que o Vite injete, pois a meta CSP só vale para o que vem depois dela.
+  transformIndexHtml(html) {
+    const charset = /<meta\s+charset=[^>]*>/i;
+    if (!charset.test(html)) throw new Error('cats-csp: <meta charset> não encontrado em index.html');
+    return html.replace(
+      charset,
+      (m) => `${m}\n    <meta http-equiv="Content-Security-Policy" content="${CSP}" />`,
+    );
+  },
 });
 
 // `base: './'` gera caminhos relativos, compatíveis com GitHub Pages em qualquer subpasta.

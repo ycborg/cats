@@ -24,6 +24,3 @@ export async function copyToClipboard(text: string): Promise<boolean> {
     document.body.removeChild(textarea);
   }
 }
-
-// A leitura da folha mora em resumeSheet; reexportada aqui para quem já importava daqui.
-export { serializeResume } from './resumeSheet';

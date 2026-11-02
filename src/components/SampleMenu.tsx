@@ -40,8 +40,8 @@ interface SampleMenuProps {
 
 /** Botão "Carregar exemplo ▾": abre a lista de áreas; escolher uma preenche vaga e currículo. */
 export function SampleMenu({ disabled, loaded, onSelect }: SampleMenuProps) {
-  const menu = useDropdownMenu(MENU_WIDTH_PX);
-  const { close } = menu;
+  const { open, align, menuId, containerRef, buttonRef, setItemRef, close, toggle, onButtonKeyDown, onMenuKeyDown } =
+    useDropdownMenu(MENU_WIDTH_PX);
 
   const choose = (id: SampleId) => {
     close(true);
@@ -49,36 +49,36 @@ export function SampleMenu({ disabled, loaded, onSelect }: SampleMenuProps) {
   };
 
   return (
-    <div ref={menu.containerRef} className="relative">
+    <div ref={containerRef} className="relative">
       <button
-        ref={menu.buttonRef}
+        ref={buttonRef}
         type="button"
-        onClick={menu.toggle}
-        onKeyDown={menu.onButtonKeyDown}
+        onClick={toggle}
+        onKeyDown={onButtonKeyDown}
         disabled={disabled}
         aria-haspopup="menu"
-        aria-expanded={menu.open}
-        aria-controls={menu.menuId}
+        aria-expanded={open}
+        aria-controls={menuId}
         className={`${buttonStyles.secondary} min-w-[184px] ${loaded ? buttonStyles.success : ''}`}
       >
         {loaded ? <Check className="size-4" aria-hidden="true" /> : <FileText className="size-4" aria-hidden="true" />}
         {loaded ? 'Exemplo carregado' : 'Carregar exemplo'}
         {!loaded && (
           <ChevronDown
-            className={`size-4 transition-transform duration-200 ${menu.open ? 'rotate-180' : ''}`}
+            className={`size-4 transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
             aria-hidden="true"
           />
         )}
       </button>
 
-      {menu.open && (
+      {open && (
         <div
-          id={menu.menuId}
+          id={menuId}
           role="menu"
           aria-label="Exemplos por área"
-          onKeyDown={menu.onMenuKeyDown}
+          onKeyDown={onMenuKeyDown}
           className={`absolute top-full z-30 mt-2 flex w-[19rem] max-w-[calc(100vw-2rem)] animate-fade-up flex-col rounded-xl border border-line bg-white p-1.5 shadow-[0_12px_32px_-12px_rgba(15,20,30,0.28)] ${
-            menu.align === 'right' ? 'right-0 origin-top-right' : 'left-0 origin-top-left'
+            align === 'right' ? 'right-0 origin-top-right' : 'left-0 origin-top-left'
           }`}
         >
           <p className="px-3 pt-1.5 pb-1 text-[11px] font-semibold tracking-wide text-muted uppercase">Escolha uma área</p>
@@ -89,7 +89,7 @@ export function SampleMenu({ disabled, loaded, onSelect }: SampleMenuProps) {
               return (
                 <button
                   key={sample.id}
-                  ref={menu.setItemRef(index)}
+                  ref={setItemRef(index)}
                   type="button"
                   role="menuitem"
                   tabIndex={-1}

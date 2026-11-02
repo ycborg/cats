@@ -140,9 +140,10 @@ export const NEGATION_CUES: Set<string> = words(`nao nunca jamais sem nenhum nen
 
 /** A negação só vale se, logo depois, aparecer uma destas palavras ("não tenho", "sem experiência"). */
 export const NEGATION_TRIGGERS: Set<string> = words(`
-  tenho tive possuo conheco domino sei usei uso utilizei utilizo trabalhei trabalho atuei experiencia
-  conhecimento vivencia contato familiaridade dominio pratica
-  experience knowledge familiarity exposure worked used
+  tenho tive possuo conheco domino sei usei uso utilizei utilizo trabalhei trabalho atuei
+  experiencia experiencias conhecimento conhecimentos vivencia vivencias contato contatos familiaridade
+  dominio dominios pratica praticas
+  experience experiences knowledge familiarity exposure worked used
 `);
 
 /** Logo após a negação, estas palavras indicam ênfase, não negação ("não só", "not only"). */
