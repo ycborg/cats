@@ -165,6 +165,8 @@ export interface TypoAlert {
 export interface AnalysisResult {
   /** Score composto final (0–100). */
   score: number;
+  /** A vaga trouxe algo avaliável (termos, cargo, experiência ou formação); sem isso a nota não vale. */
+  jobRecognized: boolean;
   level: MatchLevel;
   subScores: SubScore[];
   found: Keyword[];

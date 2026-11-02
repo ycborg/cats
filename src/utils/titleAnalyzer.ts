@@ -2,7 +2,7 @@ import type { ExperienceEntry, TitleAnalysis } from '../types/ats';
 import { cleanText } from './resumeBuilder';
 import { stripAccents } from './textProcessing';
 import type { NormalizedTitle } from './titleMatcher';
-import { compareTitles, isRecognizable, normalizeTitle, seniorityOf } from './titleMatcher';
+import { compareTitles, isRecognizable, normalizeTitle, seniorityOf, verdictFromScore } from './titleMatcher';
 
 const LABELED_TITLE = /^(vaga|cargo|posicao|position|job title|titulo|role)\s*:\s*/;
 /** Cargos mais antigos que o atual valem um pouco menos. */
@@ -30,8 +30,12 @@ const VERDICT_TEXT = {
     `Nenhum cargo do seu currículo corresponde a "${job}". Se você exerceu essa função com outro nome, deixe isso claro na descrição da experiência.`,
 };
 
-export function analyzeTitle(jobText: string, headline: string, entries: ExperienceEntry[]): TitleAnalysis {
-  const job = extractJobTitle(jobText);
+/** Recebe o título da vaga já extraído (`extractJobTitle`), para não ler a vaga duas vezes. */
+export function analyzeTitle(
+  job: ReturnType<typeof extractJobTitle>,
+  headline: string,
+  entries: ExperienceEntry[],
+): TitleAnalysis {
   if (!job) {
     return {
       jobTitle: null,
@@ -57,7 +61,7 @@ export function analyzeTitle(jobText: string, headline: string, entries: Experie
 
   const score = best?.score ?? 0;
   const bestTitle = best && best.score > 0 ? best.title : null;
-  const verdict = score >= 90 ? 'same' : score >= 50 ? 'close' : score > 0 ? 'neighbor' : 'none';
+  const verdict = verdictFromScore(score);
 
   let explanation =
     verdict === 'none' || !bestTitle

@@ -1,10 +1,10 @@
 import type { AtsTip, Keyword, MissingKeywordSuggestion } from '../types/ats';
+import { EMAIL } from './patterns';
 import { stripAccents } from './textProcessing';
 
 const ACTION_VERBS =
   /\b(desenvolvi|implementei|liderei|criei|otimizei|reduzi|aumentei|entreguei|construi|projetei|automatizei|migrei|coordenei|gerenciei|conduzi|estruturei|melhorei|lancei|integrei|configurei|developed|led|built|implemented|designed|improved|reduced|increased|delivered|created)\b/g;
 const METRICS = /\d+\s?%|\br\$\s?\d|\b\d+\s?(x|k|mil|horas|dias|usuarios|clientes|squads)\b/g;
-const EMAIL = /[\w.+-]+@[\w-]+\.[\w.-]+/;
 const COLUMN_LAYOUT = /\t|\S {3,}\S|[│┃┌┐└┘├┤─]/;
 
 const DEFAULT_TIPS: AtsTip[] = [

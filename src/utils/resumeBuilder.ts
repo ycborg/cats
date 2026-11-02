@@ -1,5 +1,7 @@
 import type { AtsResume, Keyword, ResumeLine, ResumeSection, ResumeSectionId } from '../types/ats';
 import type { KeywordMatch } from './keywordAnalyzer';
+import { resolveSynonym } from './keywordAnalyzer';
+import { BULLET, EMAIL, PHONE } from './patterns';
 import { stripAccents, termKey } from './textProcessing';
 
 /**
@@ -36,10 +38,6 @@ const SECTION_TITLES: Record<ResumeSectionId, string> = {
 
 const SECTION_ORDER: ResumeSectionId[] = ['summary', 'skills', 'experience', 'education', 'projects', 'languages', 'other'];
 
-export const BULLET = /^[-•*▪►➤–—·●○◦■□✓✔→]\s*/;
-// Tamanhos limitados: sem limite, texto longo sem espaços custa tempo quadrático (≈1 s em 30 mil caracteres).
-export const EMAIL = /[\w.+-]{1,64}@[\w-]{1,253}\.[\w.-]{2,63}/;
-export const PHONE = /(\+?\d{2}\s?)?\(?\d{2}\)?\s?9?\d{4}[-\s]?\d{4}/;
 const URL = /(https?:\/\/|www\.)\S+|\b(linkedin|github|gitlab|behance)\.com\/\S+/i;
 const CONTACT_LABEL = /^(e-?mail|telefone|tel|celular|whatsapp|linkedin|github|portf[oó]lio|site|endere[cç]o|localiza[cç][aã]o|cidade)\s*:\s*/i;
 const LOCATION = /^[\p{L}\s.'-]+(,|\s[-/])\s?[A-Za-z]{2}\b/u;
@@ -195,7 +193,8 @@ function buildSkills(match: SheetKeywords, originalLines: string[]): ResumeLine[
     }
     for (const item of items) {
       const key = termKey(item);
-      if (!item || !key || knownKeys.has(key) || extras.has(key)) continue;
+      // "Adobe Photoshop" já está coberto por "Photoshop" em Técnicas: compara pela forma principal.
+      if (!item || !key || knownKeys.has(key) || knownKeys.has(resolveSynonym(key)) || extras.has(key)) continue;
       extras.set(key, item);
     }
   }

@@ -1,3 +1,4 @@
+import { BULLET } from './patterns';
 import { stripAccents } from './textProcessing';
 
 /**
@@ -21,7 +22,7 @@ const SECTION_MODES: Array<{ mode: JobSectionMode; pattern: RegExp }> = [
 
 export function detectJobSection(line: string): JobSectionMode | null {
   const trimmed = line.trim();
-  if (!trimmed || trimmed.length > 45 || /^[-•*▪►➤–—·●]/.test(trimmed)) return null;
+  if (!trimmed || trimmed.length > 45 || BULLET.test(trimmed)) return null;
   const plain = stripAccents(trimmed.toLowerCase());
   if (plain.split(/\s+/).length > 5) return null;
   return SECTION_MODES.find((section) => section.pattern.test(plain))?.mode ?? null;

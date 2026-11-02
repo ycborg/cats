@@ -77,7 +77,8 @@ const MAX_PHRASE = Math.min(
 );
 
 /** Resolve sinônimos para a forma principal. */
-const resolve = (key: string): string => SYNONYMS.get(key) ?? key;
+export const resolveSynonym = (key: string): string => SYNONYMS.get(key) ?? key;
+const resolve = resolveSynonym;
 
 function lexiconCategory(key: string): LexiconEntry['category'] | null {
   return LEXICON.get(resolve(key))?.category ?? null;

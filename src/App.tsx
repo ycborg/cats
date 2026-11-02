@@ -11,7 +11,7 @@ import { useSheetBridgeProvider } from './hooks/useSheetBridge';
 import { useTransientFlag } from './hooks/useTransientFlag';
 import { useViewportFitHeight } from './hooks/useViewportFitHeight';
 import type { AnalysisResult, UiStatus } from './types/ats';
-import { MATCH_LEVEL_LABEL, analyzeResume } from './utils/atsAnalyzer';
+import { MATCH_LEVEL_LABEL, analyzeResume, detectInputMixup } from './utils/atsAnalyzer';
 import type { SampleId } from './utils/sampleData';
 import { SAMPLES } from './utils/sampleData';
 import { loadDraft, saveDraft } from './utils/draftStorage';
@@ -100,7 +100,16 @@ export default function App() {
       setRunId((id) => id + 1);
       setStatus('success');
       flashAnalysisDone();
-      showToast(`Análise concluída: ${analysis.score}% · ${MATCH_LEVEL_LABEL[analysis.level]}.`);
+      const mixup = detectInputMixup(job, resume);
+      showToast(
+        mixup === 'same'
+          ? 'Vaga e currículo têm o mesmo texto. Confira os campos.'
+          : mixup === 'swapped'
+            ? 'Parece que vaga e currículo estão trocados. Confira os campos.'
+            : !analysis.jobRecognized
+              ? 'Não reconhecemos requisitos na vaga. Cole a descrição completa.'
+              : `Análise concluída: ${analysis.score}% · ${MATCH_LEVEL_LABEL[analysis.level]}.`,
+      );
     }, ANALYSIS_DELAY_MS);
   }, [isTwoColumns, flashAnalysisDone, showToast]);
 

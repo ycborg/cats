@@ -23,7 +23,8 @@ import { stripAccents } from './textProcessing';
 const SENIORITY_LABEL: Array<[RegExp, string]> = [
   [/\b(estagiari[oa]|estagio|intern)\b/, 'Estágio'],
   [/\b(junior|jr)\b/, 'Júnior'],
-  [/\b(pleno|pl)\b/, 'Pleno'],
+  // "PL/SQL" é a linguagem, não a abreviação de Pleno.
+  [/\b(pleno|pl(?!\s*\/\s*sql))\b/, 'Pleno'],
   [/\b(senior|sr)\b/, 'Sênior'],
 ];
 
@@ -155,10 +156,23 @@ const SCORE_TABLE: Record<HeadRelation, Partial<Record<AreaRelation, number>>> =
   missing: { same: 70, neighbor: 40 },
 };
 
+/** Faixas do veredito (única fonte): 90+ mesmo cargo, 50+ próximo, acima de 0 vizinho. */
+export function verdictFromScore(score: number): Exclude<TitleVerdict, 'unknown'> {
+  return score >= 90 ? 'same' : score >= 50 ? 'close' : score > 0 ? 'neighbor' : 'none';
+}
+
+/** Rótulo de cada veredito, usado no resumo da nota e no selo do painel. */
+export const TITLE_VERDICT_LABEL: Record<TitleVerdict, string> = {
+  same: 'Mesmo cargo',
+  close: 'Cargo próximo',
+  neighbor: 'Cargo vizinho',
+  none: 'Sem correspondência',
+  unknown: 'Não identificado',
+};
+
 export function compareTitles(job: NormalizedTitle, resume: NormalizedTitle): TitleComparison {
   const score = SCORE_TABLE[headRelation(job, resume)][areaRelation(job, resume)] ?? 0;
-  const verdict: TitleVerdict = score >= 90 ? 'same' : score >= 50 ? 'close' : score > 0 ? 'neighbor' : 'none';
-  return { score, verdict };
+  return { score, verdict: verdictFromScore(score) };
 }
 
 /** Um título é "reconhecível" quando tem função ou área conhecida. */

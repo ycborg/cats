@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import type { AnalysisResult, ResumeSectionId } from '../src/types/ats';
 import { analyzeResume } from '../src/utils/atsAnalyzer';
-import { EMAIL } from '../src/utils/resumeBuilder';
+import { EMAIL } from '../src/utils/patterns';
 import { SAMPLES } from '../src/utils/sampleData';
 import { stripAccents, termKey } from '../src/utils/textProcessing';
 
