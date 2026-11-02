@@ -1,7 +1,6 @@
 import type { LucideIcon } from 'lucide-react';
 import { ChevronDown, FileDown, FileText, FileType, LoaderCircle } from 'lucide-react';
-import type { KeyboardEvent } from 'react';
-import { useEffect, useId, useRef, useState } from 'react';
+import { useDropdownMenu } from '../hooks/useDropdownMenu';
 import { buttonStyles } from './buttonStyles';
 
 export type ExportFormat = 'pdf' | 'docx' | 'txt';
@@ -12,9 +11,8 @@ const OPTIONS: Array<{ format: ExportFormat; label: string; hint: string; icon: 
   { format: 'txt', label: 'Texto (.txt)', hint: 'Para colar em formulários de vaga', icon: FileText },
 ];
 
-/** Largura do menu (w-72) e margem mínima até a borda da tela, em px. */
-const MENU_WIDTH = 288;
-const VIEWPORT_MARGIN = 16;
+/** Largura do menu (w-72), usada para decidir o lado de abertura. */
+const MENU_WIDTH_PX = 288;
 
 interface ExportMenuProps {
   busy: boolean;
@@ -23,96 +21,44 @@ interface ExportMenuProps {
 
 /** Botão "Exportar ▾": abre as opções de formato (PDF, Word, texto). */
 export function ExportMenu({ busy, onExport }: ExportMenuProps) {
-  const menuId = useId();
-  const [open, setOpen] = useState(false);
-  // Abre para a esquerda (alinhado à direita do botão) quando há espaço; senão, para a direita.
-  // No celular o botão quebra para o início da linha e o menu sumiria pela borda esquerda.
-  const [alignRight, setAlignRight] = useState(true);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const buttonRef = useRef<HTMLButtonElement>(null);
-  const itemRefs = useRef<Array<HTMLButtonElement | null>>([]);
-
-  const openMenu = () => {
-    const rect = buttonRef.current?.getBoundingClientRect();
-    setAlignRight(!rect || rect.right - MENU_WIDTH >= VIEWPORT_MARGIN);
-    setOpen(true);
-  };
-
-  const close = (returnFocus = false) => {
-    setOpen(false);
-    if (returnFocus) buttonRef.current?.focus();
-  };
-
-  useEffect(() => {
-    if (!open) return;
-    itemRefs.current[0]?.focus();
-    const handlePointer = (event: PointerEvent) => {
-      if (!containerRef.current?.contains(event.target as Node)) setOpen(false);
-    };
-    document.addEventListener('pointerdown', handlePointer);
-    return () => document.removeEventListener('pointerdown', handlePointer);
-  }, [open]);
-
-  const handleMenuKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    const items = itemRefs.current.filter((item): item is HTMLButtonElement => item !== null);
-    const index = items.indexOf(document.activeElement as HTMLButtonElement);
-    const focusAt = (next: number) => items[(next + items.length) % items.length]?.focus();
-    if (event.key === 'ArrowDown') {
-      event.preventDefault();
-      focusAt(index + 1);
-    } else if (event.key === 'ArrowUp') {
-      event.preventDefault();
-      focusAt(index - 1);
-    } else if (event.key === 'Escape') {
-      event.preventDefault();
-      close(true);
-    } else if (event.key === 'Tab') {
-      close();
-    }
-  };
+  const menu = useDropdownMenu(MENU_WIDTH_PX);
+  const { close } = menu;
 
   return (
-    <div ref={containerRef} className="relative">
+    <div ref={menu.containerRef} className="relative">
       <button
-        ref={buttonRef}
+        ref={menu.buttonRef}
         type="button"
-        onClick={() => (open ? close() : openMenu())}
-        onKeyDown={(event) => {
-          if (event.key === 'ArrowDown' && !open) {
-            event.preventDefault();
-            openMenu();
-          }
-        }}
+        onClick={menu.toggle}
+        onKeyDown={menu.onButtonKeyDown}
         disabled={busy}
         aria-busy={busy}
         aria-haspopup="menu"
-        aria-expanded={open}
-        aria-controls={menuId}
+        aria-expanded={menu.open}
+        aria-controls={menu.menuId}
         className={`${buttonStyles.primaryCompact} min-w-[140px]`}
       >
         {busy ? <LoaderCircle className="size-4 animate-spin" aria-hidden="true" /> : <FileDown className="size-4" aria-hidden="true" />}
         {busy ? 'Exportando…' : 'Exportar'}
         {!busy && (
-          <ChevronDown className={`size-4 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} aria-hidden="true" />
+          <ChevronDown className={`size-4 transition-transform duration-200 ${menu.open ? 'rotate-180' : ''}`} aria-hidden="true" />
         )}
       </button>
 
-      {open && (
+      {menu.open && (
         <div
-          id={menuId}
+          id={menu.menuId}
           role="menu"
           aria-label="Formatos de exportação"
-          onKeyDown={handleMenuKeyDown}
-          className={`absolute top-full z-30 mt-2 w-72 max-w-[calc(100vw-2rem)] animate-fade-up ${alignRight ? 'right-0 origin-top-right' : 'left-0 origin-top-left'} rounded-xl border border-line bg-white p-1.5 shadow-[0_12px_32px_-12px_rgba(15,20,30,0.28)]`}
+          onKeyDown={menu.onMenuKeyDown}
+          className={`absolute top-full z-30 mt-2 w-72 max-w-[calc(100vw-2rem)] animate-fade-up ${menu.align === 'right' ? 'right-0 origin-top-right' : 'left-0 origin-top-left'} rounded-xl border border-line bg-white p-1.5 shadow-[0_12px_32px_-12px_rgba(15,20,30,0.28)]`}
         >
           {OPTIONS.map((option, index) => {
             const Icon = option.icon;
             return (
               <button
                 key={option.format}
-                ref={(element) => {
-                  itemRefs.current[index] = element;
-                }}
+                ref={menu.setItemRef(index)}
                 type="button"
                 role="menuitem"
                 tabIndex={-1}

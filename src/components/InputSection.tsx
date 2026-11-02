@@ -35,7 +35,7 @@ interface TextFieldProps {
   /** Ação exibida no centro do campo enquanto ele está vazio (ex.: botão "Importar"). */
   emptyAction?: ReactNode;
   /** Quando definido, o card aceita arrastar e soltar um arquivo. */
-  onFileDrop?: (file: File) => void;
+  onFileDrop?: (files: File[]) => void;
   onChange: (value: string) => void;
 }
 
@@ -104,8 +104,8 @@ function TextField({
           if (!isFileDrag(event)) return;
           event.preventDefault();
           setDragActive(false);
-          const file = event.dataTransfer.files[0];
-          if (file) onFileDrop(file);
+          const files = Array.from(event.dataTransfer.files);
+          if (files.length > 0) onFileDrop(files);
         },
       }
     : {};
@@ -253,6 +253,8 @@ interface InputSectionProps {
   onLoadSample: (id: SampleId) => void;
   onClear: () => void;
   onAnalyze: () => void;
+  /** O texto mudou depois da última análise: o resultado na tela é de uma versão antiga. */
+  stale: boolean;
 }
 
 export function InputSection({
@@ -269,6 +271,7 @@ export function InputSection({
   onLoadSample,
   onClear,
   onAnalyze,
+  stale,
 }: InputSectionProps) {
   const fieldsRef = useRef<HTMLDivElement>(null);
   const [split, setSplit] = useState(DEFAULT_SPLIT);
@@ -321,7 +324,7 @@ export function InputSection({
           autoGrow={autoGrow}
           style={fitted ? { flex: `${1 - split} 1 0px` } : undefined}
           emptyAction={<ResumeImportButton importing={importing} onFile={importFile} />}
-          onFileDrop={importFile}
+          onFileDrop={([first, ...others]) => importFile(first!, others.length)}
           onChange={onResumeChange}
         />
       </div>
@@ -344,6 +347,9 @@ export function InputSection({
           {analyzeLabel}
         </button>
       </div>
+      {isReady && stale && !isAnalyzing && (
+        <p className="-mt-2 shrink-0 text-right text-xs text-muted">O texto mudou desde a análise.</p>
+      )}
       {!isReady && (
         <p className="-mt-2 shrink-0 text-right text-xs text-muted">
           Preencha os dois campos (mín. {MIN_CHARS} caracteres cada) para habilitar a análise.
