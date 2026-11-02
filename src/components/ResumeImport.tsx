@@ -17,7 +17,8 @@ export function useResumeImport(
   const showToast = useToast();
   const [importing, setImporting] = useState(false);
 
-  const importFile = async (file: File) => {
+  /** `ignored`: quantos outros arquivos vieram junto (arrastar vários) e ficaram de fora. */
+  const importFile = async (file: File, ignored = 0) => {
     if (importing) return;
     const previousText = currentText;
 
@@ -27,7 +28,9 @@ export function useResumeImport(
       onImported(imported.text);
       onFileRead?.(imported);
       showToast(
-        `Currículo importado de "${file.name}". Confira o texto antes de analisar.`,
+        ignored > 0
+          ? `Usei só o primeiro arquivo ("${file.name}"); ${ignored === 1 ? 'o outro foi ignorado' : `os outros ${ignored} foram ignorados`}. Confira o texto.`
+          : `Currículo importado de "${file.name}". Confira o texto antes de analisar.`,
         'success',
         previousText.trim() ? { label: 'Desfazer', onClick: () => onImported(previousText) } : undefined,
       );

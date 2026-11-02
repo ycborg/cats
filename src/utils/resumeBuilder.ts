@@ -1,5 +1,8 @@
 import type { AtsResume, Keyword, ResumeLine, ResumeSection, ResumeSectionId } from '../types/ats';
-import { stripAccents, termKey } from './textProcessing';
+import type { KeywordMatch } from './keywordAnalyzer';
+import { isRoleWord, resolveSynonym } from './keywordAnalyzer';
+import { BULLET, EMAIL, PHONE } from './patterns';
+import { stripAccents, termKey, tokenize } from './textProcessing';
 
 /**
  * Reestrutura o texto bruto do currículo no formato vertical aceito por ATS.
@@ -35,14 +38,13 @@ const SECTION_TITLES: Record<ResumeSectionId, string> = {
 
 const SECTION_ORDER: ResumeSectionId[] = ['summary', 'skills', 'experience', 'education', 'projects', 'languages', 'other'];
 
-export const BULLET = /^[-•*▪►➤–—·●○◦■□✓✔→]\s*/;
-export const EMAIL = /[\w.+-]+@[\w-]+\.[\w.-]+/;
-export const PHONE = /(\+?\d{2}\s?)?\(?\d{2}\)?\s?9?\d{4}[-\s]?\d{4}/;
 const URL = /(https?:\/\/|www\.)\S+|\b(linkedin|github|gitlab|behance)\.com\/\S+/i;
 const CONTACT_LABEL = /^(e-?mail|telefone|tel|celular|whatsapp|linkedin|github|portf[oó]lio|site|endere[cç]o|localiza[cç][aã]o|cidade)\s*:\s*/i;
 const LOCATION = /^[\p{L}\s.'-]+(,|\s[-/])\s?[A-Za-z]{2}\b/u;
+/** "Rótulo: conteúdo" ("Stack: React, Node.js"): é conteúdo da seção, não título. */
+const LABELED_CONTENT = /^[^:]{1,30}:\s*\S/;
 const DATE_HINT = /\b(19|20)\d{2}\b|\b(atual|presente|present|current)\b/i;
-const EMOJI = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}]/gu;
+const EMOJI = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]|\u{FE0F}/gu;
 
 export const cleanText = (value: string): string => value.replace(EMOJI, '').replace(/\s+/g, ' ').trim();
 
@@ -58,6 +60,9 @@ function joinPt(items: string[]): string {
 function detectHeading(line: string): ParsedSectionId | null {
   const raw = line.replace(/[:\-–—_=*#]+$/, '').trim();
   if (!raw || raw.length > 48 || BULLET.test(line) || /\d/.test(raw) || /[.,;]$/.test(raw)) return null;
+  // Só o ":" final indica título. "Stack: React" ou "Resumo: …" no meio de uma seção é conteúdo:
+  // tratá-lo como título abria uma seção nova e apagava as linhas seguintes.
+  if (LABELED_CONTENT.test(raw)) return null;
   const plain = stripAccents(raw.toLowerCase()).replace(/[^a-z\s]/g, ' ').replace(/\s+/g, ' ').trim();
   if (!plain || plain.split(' ').length > 5) return null;
   return HEADING_RULES.find((rule) => rule.pattern.test(plain))?.id ?? null;
@@ -69,18 +74,35 @@ export interface Block {
   lines: string[];
 }
 
+/** Seções que, abertas logo depois da experiência, podem ser só um rótulo dentro de um emprego. */
+const NESTABLE_IN_EXPERIENCE = new Set<ParsedSectionId>(['skills', 'certifications']);
+
+/** Título de emprego: tem data e uma palavra de cargo ("Analista | Empresa B | 2018 - 2021"). */
+const looksLikeJobEntry = (line: string): boolean =>
+  !BULLET.test(line) && DATE_HINT.test(line) && tokenize(line).some((token) => isRoleWord(token));
+
 export function parseBlocks(text: string): { headerLines: string[]; blocks: Block[] } {
   const headerLines: string[] = [];
   const blocks: Block[] = [];
   let current: Block | null = null;
+  /** Linha original do título de cada bloco, para devolvê-lo intacto ao histórico. */
+  const headingLines = new Map<Block, string>();
 
   for (const rawLine of text.split(/\r?\n/)) {
     const line = rawLine.trim();
     if (!line) continue;
     const heading = detectHeading(line);
+    const previous = blocks[blocks.length - 2];
     if (heading) {
       current = { id: heading, heading: cleanText(line.replace(/:+$/, '')), lines: [] };
+      headingLines.set(current, line);
       blocks.push(current);
+    } else if (current && NESTABLE_IN_EXPERIENCE.has(current.id) && previous?.id === 'experience' && looksLikeJobEntry(line)) {
+      // "Tecnologias utilizadas:" dentro de um emprego abriu Habilidades, mas o próximo cargo mostra
+      // que ainda era o histórico: o bloco inteiro volta para a experiência, na mesma ordem.
+      previous.lines.push(headingLines.get(current) ?? current.heading, ...current.lines, line);
+      blocks.pop();
+      current = previous;
     } else if (current) {
       current.lines.push(line);
     } else {
@@ -135,6 +157,9 @@ function parseHeader(headerLines: string[]): ParsedHeader {
 }
 
 function looksLikeEntryTitle(text: string): boolean {
+  if (LABELED_CONTENT.test(text) && !DATE_HINT.test(text)) return false;
+  // "Tecnologias utilizadas:" devolvido ao histórico é rótulo de lista, não cargo.
+  if (text.endsWith(':')) return false;
   return text.length <= 110 && (DATE_HINT.test(text) || /\s[|–—@]\s/.test(text) || (text.length <= 60 && !/[.!?]$/.test(text)));
 }
 
@@ -148,12 +173,34 @@ function toLines(lines: string[], mode: 'entries' | 'plain'): ResumeLine[] {
     .filter((line) => line.text.length > 0);
 }
 
-function buildSkills(found: Keyword[], originalLines: string[]): ResumeLine[] {
+/** O que a folha precisa do cruzamento: os termos encontrados e como estão escritos no currículo. */
+export type SheetKeywords = Pick<KeywordMatch, 'found' | 'resumeForms'>;
+
+/** Um item de habilidade maior que isso não é um termo de lista: a linha é mantida inteira. */
+const MAX_SKILL_ITEM = 40;
+
+/** Grafia que a pessoa usou no currículo para cada termo encontrado (nunca o rótulo da vaga). */
+function writtenTerms(keywords: Keyword[], resumeForms: Map<string, string>): string[] {
+  const terms = new Map<string, string>();
+  for (const keyword of keywords) {
+    const form = resumeForms.get(keyword.key);
+    if (form && !terms.has(termKey(form))) terms.set(termKey(form), cleanText(form));
+  }
+  return [...terms.values()];
+}
+
+/**
+ * Termos que a folha lista: só os do dicionário (técnicos e comportamentais). Palavras genéricas
+ * recorrentes na vaga ("mensal", "construtora") contam na nota, mas não são competência para listar.
+ */
+const listable = (found: Keyword[]): Keyword[] => found.filter((keyword) => keyword.category !== 'general');
+
+function buildSkills(match: SheetKeywords, originalLines: string[]): ResumeLine[] {
+  const { resumeForms } = match;
+  const found = listable(match.found);
   const lines: ResumeLine[] = [];
-  const technical = found.filter((keyword) => keyword.category === 'tech').map((keyword) => keyword.label);
-  const competencies = found
-    .filter((keyword) => keyword.category !== 'tech')
-    .map((keyword) => capitalize(keyword.label));
+  const technical = writtenTerms(found.filter((keyword) => keyword.category === 'tech'), resumeForms);
+  const competencies = writtenTerms(found.filter((keyword) => keyword.category !== 'tech'), resumeForms).map(capitalize);
 
   if (technical.length) lines.push({ kind: 'paragraph', text: `Técnicas: ${technical.join(', ')}` });
   if (competencies.length) lines.push({ kind: 'paragraph', text: `Competências e métodos: ${competencies.join(', ')}` });
@@ -161,31 +208,42 @@ function buildSkills(found: Keyword[], originalLines: string[]): ResumeLine[] {
   // Demais habilidades do currículo original que não coincidem com a vaga — preservadas.
   const knownKeys = new Set(found.map((keyword) => keyword.key));
   const extras = new Map<string, string>();
+  const wholeLines: ResumeLine[] = [];
   for (const line of originalLines) {
     const content = line.replace(BULLET, '').replace(/^[^:]{1,30}:\s*/, '');
-    for (const rawItem of content.split(/[,;|•·]/)) {
-      const item = cleanText(rawItem).replace(/\.$/, '');
+    const items = content.split(/[,;|•·]/).map((rawItem) => cleanText(rawItem).replace(/\.$/, ''));
+    // Item longo é frase ("Gestão de fornecedores internacionais e importação"): fica a linha inteira.
+    if (items.some((item) => item.length > MAX_SKILL_ITEM)) {
+      wholeLines.push({ kind: 'bullet', text: cleanText(line.replace(BULLET, '')) });
+      continue;
+    }
+    for (const item of items) {
       const key = termKey(item);
-      if (!item || item.length > 40 || !key || knownKeys.has(key) || extras.has(key)) continue;
+      // "Adobe Photoshop" já está coberto por "Photoshop" em Técnicas: compara pela forma principal.
+      if (!item || !key || knownKeys.has(key) || knownKeys.has(resolveSynonym(key)) || extras.has(key)) continue;
       extras.set(key, item);
     }
   }
   if (extras.size) lines.push({ kind: 'paragraph', text: `Complementares: ${[...extras.values()].join(', ')}` });
+  lines.push(...wholeLines);
 
   return lines;
 }
 
-function buildSummary(summaryLines: ResumeLine[], found: Keyword[]): ResumeLine[] {
+function buildSummary(summaryLines: ResumeLine[], match: SheetKeywords): ResumeLine[] {
   if (summaryLines.length) return summaryLines;
-  const highlights = found.slice(0, 5).map((keyword) => keyword.label);
+  const highlights = writtenTerms(listable(match.found), match.resumeForms).slice(0, 5);
   const text = highlights.length
     ? `Profissional com atuação em ${joinPt(highlights)}, conforme detalhado no histórico profissional abaixo.`
     : 'Escreva aqui um resumo de 3 a 4 linhas com seu cargo-alvo, anos de experiência e principais resultados reais.';
   return [{ kind: 'paragraph', text }];
 }
 
-export function buildAtsResume(resumeText: string, found: Keyword[]): AtsResume {
-  const { headerLines, blocks } = parseBlocks(resumeText);
+/** Monta a folha a partir dos blocos já separados por `parseBlocks` (evita refazer a leitura). */
+export function buildAtsResume(
+  { headerLines, blocks }: ReturnType<typeof parseBlocks>,
+  match: SheetKeywords,
+): AtsResume {
   const header = parseHeader(headerLines);
 
   const grouped = new Map<ResumeSectionId, ResumeLine[]>();
@@ -224,8 +282,8 @@ export function buildAtsResume(resumeText: string, found: Keyword[]): AtsResume 
     }
   }
 
-  grouped.set('summary', buildSummary(grouped.get('summary') ?? [], found));
-  grouped.set('skills', buildSkills(found, originalSkills));
+  grouped.set('summary', buildSummary(grouped.get('summary') ?? [], match));
+  grouped.set('skills', buildSkills(match, originalSkills));
 
   const sections: ResumeSection[] = SECTION_ORDER.map((id) => ({
     id,

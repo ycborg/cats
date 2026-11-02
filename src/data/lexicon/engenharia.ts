@@ -16,7 +16,7 @@ export default defineArea({
     'TPM', 'PCM', 'PCP', 'CLP', 'Automação Industrial', 'Instrumentação', 'Comandos Elétricos', 'Hidráulica',
     'Pneumática', 'Metrologia', 'Usinagem', 'Soldagem', 'Eficiência Energética', 'Melhoria de Processos',
     // Segurança do trabalho e meio ambiente
-    'Segurança do Trabalho', 'NR-10', 'NR-12', 'NR-18', 'NR-33', 'NR-35', 'PGR', 'PCMSO', 'APR', 'CIPA', 'EPI',
+    'Segurança do Trabalho', 'NR-10', 'NR-12', 'NR-18', 'NR-33', 'NR-35', 'Trabalho em Altura', 'PGR', 'PCMSO', 'APR', 'CIPA', 'EPI',
     'Licenciamento Ambiental', 'Gestão de Resíduos', 'Anotação de Responsabilidade Técnica',
   ],
   synonyms: [
@@ -24,7 +24,8 @@ export default defineArea({
     ['NR-12', 'NR 12', 'NR12'],
     ['NR-18', 'NR 18', 'NR18'],
     ['NR-33', 'NR 33', 'NR33'],
-    ['NR-35', 'NR 35', 'NR35', 'Trabalho em Altura'],
+    // "Trabalho em Altura" é a atividade; NR-35 é o treinamento/certificação. Não são equivalentes.
+    ['NR-35', 'NR 35', 'NR35'],
     ['PCP', 'Planejamento e Controle da Produção'],
     ['PCM', 'Planejamento e Controle da Manutenção'],
     ['CLP', 'PLC', 'Controlador Lógico Programável'],

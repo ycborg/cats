@@ -7,16 +7,19 @@ import { SittingCat } from './CatIllustrations';
 import { MatchDonut } from './MatchDonut';
 import { SubScoreList } from './SubScoreList';
 
+// A nota é composta (palavras-chave, cargo, experiência, formação e legibilidade), não só de termos.
 const LEVEL_COPY: Record<MatchLevel, string> = {
-  low: 'Seu currículo cobre poucos termos-chave desta vaga. Revise os termos ausentes que você realmente domina.',
-  medium: 'Boa base. Alguns termos importantes da vaga ainda não aparecem no seu currículo.',
-  strong: 'Seu currículo está bem alinhado aos termos-chave desta vaga.',
+  low: 'Ainda há bastante distância entre seu currículo e esta vaga. Veja os critérios e ajuste o que for verdade.',
+  medium: 'Boa base. Alguns critérios da vaga ainda não estão bem cobertos no seu currículo.',
+  strong: 'Seu currículo está bem alinhado a esta vaga nos critérios avaliados.',
 };
 
-const LEVEL_BADGE: Record<Exclude<MatchLevel, 'strong'>, { label: string; className: string }> = {
-  low: { label: 'Baixa Aderência ATS', className: 'border-missing-border bg-missing-bg text-missing-text' },
-  medium: { label: 'Aderência Moderada ATS', className: 'border-amber-200 bg-amber-50 text-amber-800' },
+const LEVEL_BADGE_CLASS: Record<Exclude<MatchLevel, 'strong'>, string> = {
+  low: 'border-missing-border bg-missing-bg text-missing-text',
+  medium: 'border-amber-200 bg-amber-50 text-amber-800',
 };
+
+const UNRECOGNIZED_COPY = 'Não reconhecemos requisitos nesta vaga. Cole a descrição completa.';
 
 function LevelBadge({ level, compact = false }: { level: MatchLevel; compact?: boolean }) {
   if (level === 'strong') {
@@ -24,15 +27,14 @@ function LevelBadge({ level, compact = false }: { level: MatchLevel; compact?: b
       <span className="inline-flex items-end gap-2">
         <SittingCat className={compact ? 'h-7 w-6 text-ink' : 'h-11 w-9 text-ink'} />
         <span className="mb-0.5 rounded-full bg-ink px-3 py-1 text-xs font-semibold whitespace-nowrap text-white">
-          Excelente Aderência ATS
+          {MATCH_LEVEL_LABEL.strong}
         </span>
       </span>
     );
   }
-  const badge = LEVEL_BADGE[level];
   return (
-    <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold whitespace-nowrap ${badge.className}`}>
-      {badge.label}
+    <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold whitespace-nowrap ${LEVEL_BADGE_CLASS[level]}`}>
+      {MATCH_LEVEL_LABEL[level]}
     </span>
   );
 }
@@ -181,19 +183,27 @@ export function ScoreHeader({ result, fullRef, compactRef }: ScoreHeaderProps) {
           <Target className="size-4" aria-hidden="true" />
           Match Score
         </h3>
-        <div className="flex flex-col items-center gap-6 sm:flex-row sm:items-center">
-          <MatchDonut score={result.score} level={result.level} />
-          <div className="flex-1 text-center sm:text-left">
-            <LevelBadge level={result.level} />
-            <p className="mt-3 text-sm leading-relaxed text-body">{LEVEL_COPY[result.level]}</p>
-            <p className="mt-2 text-xs text-muted">
-              Score composto: palavras-chave, título do cargo, experiência, formação e legibilidade.{' '}
-              <strong className="font-semibold text-ink tabular-nums">{result.found.length}</strong> de{' '}
-              <strong className="font-semibold text-ink tabular-nums">{total}</strong> termos-chave encontrados.
-            </p>
-          </div>
-        </div>
-        <SubScoreList subScores={result.subScores} />
+        {result.jobRecognized ? (
+          <>
+            <div className="flex flex-col items-center gap-6 sm:flex-row sm:items-center">
+              <MatchDonut score={result.score} level={result.level} />
+              <div className="flex-1 text-center sm:text-left">
+                <LevelBadge level={result.level} />
+                <p className="mt-3 text-sm leading-relaxed text-body">{LEVEL_COPY[result.level]}</p>
+                <p className="mt-2 text-xs text-muted">
+                  Nota composta: palavras-chave, cargo, experiência, formação e legibilidade.{' '}
+                  <strong className="font-semibold text-ink tabular-nums">{result.found.length}</strong> de{' '}
+                  <strong className="font-semibold text-ink tabular-nums">{total}</strong> termos-chave encontrados.
+                </p>
+              </div>
+            </div>
+            <SubScoreList subScores={result.subScores} />
+          </>
+        ) : (
+          <p role="status" className="rounded-xl bg-canvas px-4 py-5 text-center text-sm leading-relaxed text-body">
+            {UNRECOGNIZED_COPY}
+          </p>
+        )}
       </section>
 
       {/* Camada compacta: surge na segunda metade do trajeto. */}
@@ -204,21 +214,27 @@ export function ScoreHeader({ result, fullRef, compactRef }: ScoreHeaderProps) {
           opacity: `calc((${progressVar} - 0.4) / 0.6)`,
           transform: `translateY(calc((1 - ${progressVar}) * 12px))`,
         }}
-        aria-label={`Match Score: ${result.score}%, ${MATCH_LEVEL_LABEL[result.level]}`}
+        aria-label={result.jobRecognized ? `Match Score: ${result.score}%, ${MATCH_LEVEL_LABEL[result.level]}` : UNRECOGNIZED_COPY}
       >
-        <MiniDonut score={result.score} />
-        <div className="min-w-0">
-          <p className="flex items-baseline gap-2">
-            <span className="text-xl font-bold tracking-tight text-ink tabular-nums">{result.score}%</span>
-            <span className="truncate text-sm font-medium text-body">{MATCH_LEVEL_LABEL[result.level]}</span>
-          </p>
-          <p className="text-xs text-muted tabular-nums">
-            {result.found.length} de {total} termos-chave encontrados
-          </p>
-        </div>
-        <span className="ml-auto hidden 2xl:inline-flex">
-          <LevelBadge level={result.level} compact />
-        </span>
+        {result.jobRecognized ? (
+          <>
+            <MiniDonut score={result.score} />
+            <div className="min-w-0">
+              <p className="flex items-baseline gap-2">
+                <span className="text-xl font-bold tracking-tight text-ink tabular-nums">{result.score}%</span>
+                <span className="truncate text-sm font-medium text-body">{MATCH_LEVEL_LABEL[result.level]}</span>
+              </p>
+              <p className="text-xs text-muted tabular-nums">
+                {result.found.length} de {total} termos-chave encontrados
+              </p>
+            </div>
+            <span className="ml-auto hidden 2xl:inline-flex">
+              <LevelBadge level={result.level} compact />
+            </span>
+          </>
+        ) : (
+          <p className="truncate py-1.5 text-sm font-medium text-body">Vaga não reconhecida.</p>
+        )}
       </div>
     </div>
   );

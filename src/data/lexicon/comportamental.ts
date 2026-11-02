@@ -25,8 +25,8 @@ export default defineArea({
     ['Inglês', 'English'],
     ['Espanhol', 'Spanish'],
     ['Metodologias Ágeis', 'Metodologia Ágil', 'Métodos Ágeis'],
-    ['Comunicação Assertiva', 'Comunicação Clara'],
     ['Foco no Cliente', 'Orientação ao Cliente', 'Customer Centric'],
     ['Orientação a Resultados', 'Foco em Resultados'],
+    // "Comunicação Clara" ficou fora: clareza não é assertividade (equivalência falsa).
   ],
 });

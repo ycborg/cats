@@ -96,7 +96,7 @@ Diferenciais
   test('limite de 30 palavras-chave', () => {
     const many = Array.from({ length: 50 }, (_, i) => `- termo${String.fromCharCode(97 + (i % 26))}${String.fromCharCode(97 + Math.floor(i / 26))}xyz`);
     const job = `Analista\nRequisitos\n${many.join('\n')}\n${many.join('\n')}`;
-    expect(extractKeywords(job).length).toBeLessThanOrEqual(30);
+    expect(extractKeywords(job).length).toBe(30);
   });
 });
 

@@ -128,3 +128,26 @@ export const UPPERCASE_ONLY_TERMS: Set<string> = new Set(['solid']);
 
 /** Tokens com barra que são um termo único (os demais "react/vue" são separados). */
 export const KNOWN_SLASH_TOKENS: Set<string> = new Set(['ci/cd', 'ui/ux', 'ux/ui', 'e/ou', 'pl/sql', 'tcp/ip']);
+
+/*
+ * Negação ("Não tenho experiência com Java"): o termo citado não conta como encontrado.
+ * Regra conservadora: só vale quando a negação vem acompanhada de um gatilho de experiência logo
+ * depois (até duas palavras), para não confundir "não medi esforços" ou "não só X, mas também Y".
+ */
+
+/** Palavras que abrem uma negação. ("no" fica de fora: em português é "em + o".) */
+export const NEGATION_CUES: Set<string> = words(`nao nunca jamais sem nenhum nenhuma not never without lack`);
+
+/** A negação só vale se, logo depois, aparecer uma destas palavras ("não tenho", "sem experiência"). */
+export const NEGATION_TRIGGERS: Set<string> = words(`
+  tenho tive possuo conheco domino sei usei uso utilizei utilizo trabalhei trabalho atuei
+  experiencia experiencias conhecimento conhecimentos vivencia vivencias contato contatos familiaridade
+  dominio dominios pratica praticas
+  experience experiences knowledge familiarity exposure worked used
+`);
+
+/** Logo após a negação, estas palavras indicam ênfase, não negação ("não só", "not only"). */
+export const NEGATION_EXCEPTIONS: Set<string> = words(`so apenas somente only just`);
+
+/** Encerram o alcance da negação dentro do trecho ("…com Java, mas sim com Python"). */
+export const NEGATION_STOPS: Set<string> = words(`mas porem contudo entretanto apenas somente exceto salvo but only except`);

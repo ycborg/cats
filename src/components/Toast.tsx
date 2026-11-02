@@ -39,30 +39,34 @@ function visibleDuration({ message, tone, action }: Pick<ToastState, 'message' |
 
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toast, setToast] = useState<ToastState | null>(null);
-  const timers = useRef<number[]>([]);
-
-  const clearTimers = () => {
-    timers.current.forEach((timer) => window.clearTimeout(timer));
-    timers.current = [];
-  };
+  // Dois relógios separados: o da permanência na tela e o da animação de saída. Assim reiniciar um
+  // não derruba o outro (um aviso novo durante a saída não pode ser removido pelo timer do antigo).
+  const visibleTimer = useRef<number | undefined>(undefined);
+  const exitTimer = useRef<number | undefined>(undefined);
 
   const showToast = useCallback<ShowToast>((message, tone = 'success', action) => {
+    window.clearTimeout(exitTimer.current);
     setToast((current) => ({ id: (current?.id ?? 0) + 1, message, tone, action, leaving: false }));
   }, []);
 
   const dismiss = useCallback(() => {
-    clearTimers();
+    window.clearTimeout(exitTimer.current);
     setToast((current) => (current ? { ...current, leaving: true } : current));
-    timers.current.push(window.setTimeout(() => setToast(null), EXIT_MS));
+    exitTimer.current = window.setTimeout(() => setToast(null), EXIT_MS);
   }, []);
 
+  // Dependências reais: o aviso atual (id, duração, se já está saindo). Ao sair, o efeito apenas
+  // cancela o relógio de permanência, que já não serve mais; o de saída vive em `exitTimer`.
+  const toastId = toast?.id;
+  const leaving = toast?.leaving ?? false;
+  const duration = toast ? visibleDuration(toast) : 0;
   useEffect(() => {
-    if (!toast || toast.leaving) return;
-    clearTimers();
-    timers.current.push(window.setTimeout(dismiss, visibleDuration(toast)));
-    return clearTimers;
-    // Reinicia só quando chega um aviso novo (id), não durante a saída.
-  }, [toast?.id]);
+    if (toastId === undefined || leaving) return;
+    visibleTimer.current = window.setTimeout(dismiss, duration);
+    return () => window.clearTimeout(visibleTimer.current);
+  }, [toastId, leaving, duration, dismiss]);
+
+  useEffect(() => () => window.clearTimeout(exitTimer.current), []);
 
   const Icon = toast ? TONE_ICON[toast.tone] : null;
 
@@ -92,8 +96,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
               <button
                 type="button"
                 onClick={() => {
-                  toast.action?.onClick();
+                  // Fecha antes de rodar a ação: se ela mostrar outro aviso, esse não é fechado junto.
                   dismiss();
+                  toast.action?.onClick();
                 }}
                 className="pointer-events-auto ml-1 shrink-0 rounded-md px-2 py-1 text-sm font-semibold text-white underline underline-offset-2 transition-colors duration-200 hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:outline-none"
               >

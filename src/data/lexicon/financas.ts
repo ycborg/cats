@@ -25,7 +25,6 @@ export default defineArea({
   synonyms: [
     ['Orçamento', 'Budget', 'Orçamento Empresarial'],
     ['DRE', 'Demonstração do Resultado', 'Demonstração de Resultados', 'Demonstração do Resultado do Exercício'],
-    ['Fechamento Contábil', 'Fechamento Mensal'],
     ['Notas Fiscais', 'NF-e', 'NFe', 'Nota Fiscal Eletrônica'],
     ['FP&A', 'Financial Planning and Analysis'],
     ['Prevenção à Lavagem de Dinheiro', 'PLD', 'AML'],
@@ -34,5 +33,6 @@ export default defineArea({
     ['Controles Internos', 'Internal Controls'],
     ['Apuração de Impostos', 'Apuração Fiscal', 'Apuração de Tributos'],
     ['Capital de Giro', 'Working Capital'],
+    // "Fechamento Mensal" ficou fora de "Fechamento Contábil": pode ser o fechamento da folha, no RH.
   ],
 });

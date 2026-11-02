@@ -1,8 +1,10 @@
 import { Check, Copy, PencilLine, RotateCcw } from 'lucide-react';
 import { memo, useEffect, useRef, useState } from 'react';
+import { sanitizeSheetHtml, useSheetBridge } from '../hooks/useSheetBridge';
 import { useTransientFlag } from '../hooks/useTransientFlag';
 import type { AtsResume, ResumeLine } from '../types/ats';
-import { copyToClipboard, serializeResume } from '../utils/clipboard';
+import { copyToClipboard } from '../utils/clipboard';
+import { serializeResume } from '../utils/resumeSheet';
 import { buildResumeDocx, buildResumeText, downloadBlob, resumeFileName } from '../utils/resumeExport';
 import { buttonStyles } from './buttonStyles';
 import type { ExportFormat } from './ExportMenu';
@@ -67,11 +69,38 @@ const ResumeSheet = memo(function ResumeSheet({ resume }: { resume: AtsResume })
 /** Tempo para o estado "Abrindo…" ser pintado antes do diálogo de impressão bloquear a página. */
 const PRINT_DELAY_MS = 350;
 
+/** Nome que o gerador coloca quando não acha o nome da pessoa no texto (resumeBuilder). */
+const PLACEHOLDER_NAME = 'Seu Nome Completo';
+
+/** Seleciona o nome na folha: já fica pronto para digitar por cima. */
+function selectSheetName(sheet: HTMLElement) {
+  const heading = sheet.querySelector('h1');
+  const selection = window.getSelection();
+  if (!heading || !selection) return;
+  heading.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
+  sheet.focus({ preventScroll: true });
+  selection.selectAllChildren(heading);
+}
+
+const sheetText = (sheet: HTMLElement) => (sheet.textContent ?? '').replace(/\s+/g, ' ').trim();
+
 function ResumePreviewComponent({ resume }: { resume: AtsResume }) {
   const sheetRef = useRef<HTMLElement>(null);
   const showToast = useToast();
+  const bridge = useSheetBridge();
+  // Folha devolvida por "Desfazer" (limpar campos): reaplica o HTML editado em vez do gerado.
+  const [restoredHtml, setRestoredHtml] = useState(() => {
+    const html = bridge?.peekPendingHtml();
+    return html ? sanitizeSheetHtml(html) : null;
+  });
   const [version, setVersion] = useState(0);
-  const [isEdited, setIsEdited] = useState(false);
+  const [isEdited, setIsEditedState] = useState(restoredHtml !== null);
+  // Espelho de `isEdited` para a ponte ler fora do ciclo de renderização.
+  const editedRef = useRef(restoredHtml !== null);
+  const setIsEdited = (value: boolean) => {
+    editedRef.current = value;
+    setIsEditedState(value);
+  };
   const [isPrinting, setIsPrinting] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [copied, flashCopied] = useTransientFlag();
@@ -83,10 +112,30 @@ function ResumePreviewComponent({ resume }: { resume: AtsResume }) {
     return () => window.removeEventListener('afterprint', reset);
   }, []);
 
+  // Avisa o App enquanto há edição que ainda não foi copiada nem exportada (ver useSheetBridge).
+  const markUnsaved = (value: boolean) => bridge?.setUnsavedEdits(value);
+
+  const restoredOnMount = useRef(restoredHtml !== null);
+  useEffect(() => {
+    if (!bridge) return;
+    bridge.registerReader(() => (editedRef.current ? (sheetRef.current?.innerHTML ?? null) : null));
+    // Folha reaplicada por "Desfazer": o texto editado continua sem exportar.
+    if (restoredOnMount.current) {
+      bridge.setPendingHtml(null);
+      bridge.setUnsavedEdits(true);
+    }
+    return () => bridge.registerReader(null);
+  }, [bridge]);
+
   const handleCopy = async () => {
     if (!sheetRef.current) return;
+    if (!sheetText(sheetRef.current)) {
+      showToast('A folha está vazia. Escreva algo ou clique em Restaurar.', 'error');
+      return;
+    }
     const ok = await copyToClipboard(serializeResume(sheetRef.current));
     if (ok) {
+      markUnsaved(false);
       flashCopied();
       showToast('Currículo copiado para a área de transferência.');
     } else {
@@ -96,7 +145,9 @@ function ResumePreviewComponent({ resume }: { resume: AtsResume }) {
 
   const handleRestore = () => {
     setVersion((current) => current + 1);
+    setRestoredHtml(null);
     setIsEdited(false);
+    markUnsaved(false);
     flashRestored();
     showToast('Edições descartadas. A versão gerada foi restaurada.', 'info');
   };
@@ -112,17 +163,34 @@ function ResumePreviewComponent({ resume }: { resume: AtsResume }) {
     }, PRINT_DELAY_MS);
   };
 
-  const handleExport = async (format: ExportFormat) => {
+  const handleExport = async (format: ExportFormat, ignorePlaceholder = false) => {
+    const sheet = sheetRef.current;
+    if (!sheet) return;
+    // Folha apagada à mão: exportaria um arquivo vazio e diria que deu certo.
+    if (!sheetText(sheet)) {
+      showToast('A folha está vazia. Escreva algo ou clique em Restaurar.', 'error');
+      return;
+    }
+    // Não bloqueia (a pessoa pode querer preencher o nome depois), mas pergunta: o nome vai no arquivo.
+    const name = sheet.querySelector('h1')?.textContent?.replace(/\s+/g, ' ').trim();
+    if (!ignorePlaceholder && name === PLACEHOLDER_NAME) {
+      selectSheetName(sheet);
+      showToast(`O nome ainda é "${PLACEHOLDER_NAME}". Troque pelo seu antes de exportar.`, 'info', {
+        label: 'Exportar assim mesmo',
+        onClick: () => void handleExport(format, true),
+      });
+      return;
+    }
     if (format === 'pdf') {
+      markUnsaved(false);
       handlePrint();
       return;
     }
-    const sheet = sheetRef.current;
-    if (!sheet) return;
     setIsExporting(true);
     try {
       const blob = format === 'docx' ? await buildResumeDocx(sheet) : buildResumeText(sheet);
       downloadBlob(blob, resumeFileName(sheet, format));
+      markUnsaved(false);
       showToast(format === 'docx' ? 'Currículo exportado em Word (.docx).' : 'Currículo exportado em texto (.txt).');
     } catch {
       showToast('Não foi possível gerar o arquivo. Tente novamente.', 'error');
@@ -178,13 +246,15 @@ function ResumePreviewComponent({ resume }: { resume: AtsResume }) {
           spellCheck={false}
           onInput={() => {
             if (!isEdited) setIsEdited(true);
+            markUnsaved(true);
           }}
           aria-label="Currículo ATS gerado (editável)"
+          {...(restoredHtml !== null ? { dangerouslySetInnerHTML: { __html: restoredHtml } } : {})}
           className={`a4-sheet mx-auto rounded-sm border border-line bg-white px-6 py-8 shadow-[0_1px_3px_rgba(15,20,30,0.06),0_12px_32px_-12px_rgba(15,20,30,0.18)] transition duration-200 outline-none focus:ring-4 focus:ring-ink/10 sm:px-12 sm:py-12 lg:px-8 lg:py-10 xl:px-12 xl:py-12 ${
             version > 0 ? 'animate-sheet-flash' : ''
           }`}
         >
-          <ResumeSheet resume={resume} />
+          {restoredHtml === null ? <ResumeSheet resume={resume} /> : undefined}
         </article>
       </div>
     </div>

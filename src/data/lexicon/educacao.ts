@@ -22,9 +22,10 @@ export default defineArea({
     ['EAD', 'Educação a Distância', 'Ensino a Distância', 'E-learning'],
     ['Educação de Jovens e Adultos', 'EJA'],
     ['Atendimento Educacional Especializado', 'AEE'],
-    ['Projeto Político-Pedagógico', 'PPP'],
     ['Aprendizagem Baseada em Projetos', 'ABP', 'Project Based Learning'],
     ['Planejamento de Aulas', 'Planejamento de Aula'],
     ['Design Instrucional', 'Instructional Design'],
+    // Projeto Político-Pedagógico fica sem a sigla "PPP", que também é Perfil Profissiográfico
+    // Previdenciário (RH/SST) e Parceria Público-Privada.
   ],
 });

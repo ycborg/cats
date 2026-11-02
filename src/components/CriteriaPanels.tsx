@@ -1,7 +1,9 @@
 import { Check, CircleCheck, CircleX, GraduationCap, Info, Minus, ScanText, Timer, UserRoundSearch, X } from 'lucide-react';
 import type { ReactNode } from 'react';
 import type { AnalysisResult, TitleVerdict } from '../types/ats';
+import { formatYears } from '../utils/atsAnalyzer';
 import { EDUCATION_LEVEL_LABEL } from '../utils/educationAnalyzer';
+import { TITLE_VERDICT_LABEL } from '../utils/titleMatcher';
 import { Card } from './Card';
 
 function ScorePill({ score }: { score: number | null }) {
@@ -32,11 +34,11 @@ function CriterionCard({ title, icon, score, children }: { title: string; icon: 
 }
 
 const VERDICT_BADGE: Record<TitleVerdict, { label: string; className: string }> = {
-  same: { label: 'Mesmo cargo', className: 'border-found-border bg-found-bg text-found-text' },
-  close: { label: 'Cargo próximo', className: 'border-amber-200 bg-amber-50 text-amber-800' },
-  neighbor: { label: 'Cargo vizinho', className: 'border-amber-200 bg-amber-50 text-amber-800' },
-  none: { label: 'Sem correspondência', className: 'border-missing-border bg-missing-bg text-missing-text' },
-  unknown: { label: 'Não identificado', className: 'border-line bg-canvas text-muted' },
+  same: { label: TITLE_VERDICT_LABEL.same, className: 'border-found-border bg-found-bg text-found-text' },
+  close: { label: TITLE_VERDICT_LABEL.close, className: 'border-amber-200 bg-amber-50 text-amber-800' },
+  neighbor: { label: TITLE_VERDICT_LABEL.neighbor, className: 'border-amber-200 bg-amber-50 text-amber-800' },
+  none: { label: TITLE_VERDICT_LABEL.none, className: 'border-missing-border bg-missing-bg text-missing-text' },
+  unknown: { label: TITLE_VERDICT_LABEL.unknown, className: 'border-line bg-canvas text-muted' },
 };
 
 function Fact({ label, value }: { label: string; value: ReactNode }) {
@@ -47,9 +49,6 @@ function Fact({ label, value }: { label: string; value: ReactNode }) {
     </div>
   );
 }
-
-const years = (value: number) =>
-  `${value.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} ${value === 1 ? 'ano' : 'anos'}`;
 
 const months = (value: number) => {
   const y = Math.floor(value / 12);
@@ -80,8 +79,8 @@ export function ExperienceCard({ experience }: { experience: AnalysisResult['exp
     <CriterionCard title="Anos de experiência" icon={Timer} score={experience.score}>
       <dl className="grid gap-2 sm:grid-cols-3">
         <Fact label="Exigido pela vaga" value={experience.requiredYears === null ? 'Não informado' : `${experience.requiredYears}+ anos`} />
-        <Fact label="Em cargos relacionados" value={years(experience.relevantYears)} />
-        <Fact label="Total no histórico" value={years(experience.totalYears)} />
+        <Fact label="Em cargos relacionados" value={formatYears(experience.relevantYears)} />
+        <Fact label="Total no histórico" value={formatYears(experience.totalYears)} />
       </dl>
       {experience.entries.length > 0 ? (
         <ul className="mt-3 divide-y divide-line">

@@ -1,7 +1,7 @@
 import type { LegibilityAnalysis, LegibilityCheck } from '../types/ats';
 import { findDateRanges } from './dates';
 import type { Block } from './resumeBuilder';
-import { BULLET, EMAIL, PHONE } from './resumeBuilder';
+import { BULLET, EMAIL, PHONE } from './patterns';
 
 /** O que se sabe do arquivo original (só existe quando o currículo foi importado de PDF/DOCX). */
 export interface FileLayout {

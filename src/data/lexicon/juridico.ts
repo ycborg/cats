@@ -25,9 +25,11 @@ export default defineArea({
     ['LGPD', 'Lei Geral de Proteção de Dados'],
     ['PJe', 'Processo Judicial Eletrônico'],
     ['Direito do Trabalho', 'Direito Trabalhista'],
-    ['Pareceres Jurídicos', 'Pareceres', 'Elaboração de Pareceres'],
-    ['Elaboração de Contratos', 'Redação de Contratos', 'Drafting'],
-    ['Propriedade Intelectual', 'PI'],
+    // "Pareceres" sozinho não entra: parecer técnico ou pedagógico não é parecer jurídico.
+    ['Pareceres Jurídicos', 'Elaboração de Pareceres'],
+    // Sem "Drafting" (desenho técnico em engenharia) e sem "PI" (Raspberry Pi, PI de controle): são
+    // equivalências falsas que punham na folha uma competência que a pessoa não escreveu.
+    ['Elaboração de Contratos', 'Redação de Contratos'],
     ['Pesquisa Jurisprudencial', 'Pesquisa de Jurisprudência'],
   ],
 });
