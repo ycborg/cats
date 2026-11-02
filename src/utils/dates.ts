@@ -9,11 +9,12 @@ const MONTH_INDEX: Record<string, number> = {
 
 const MONTH_NAME =
   '(jan(?:eiro|uary)?|fev(?:ereiro)?|feb(?:ruary)?|mar(?:co|ch)?|abr(?:il)?|apr(?:il)?|mai(?:o)?|may|jun(?:ho|e)?|jul(?:ho|y)?|ago(?:sto)?|aug(?:ust)?|set(?:embro)?|sep(?:t(?:ember)?)?|out(?:ubro)?|oct(?:ober)?|nov(?:embro|ember)?|dez(?:embro)?|dec(?:ember)?)';
-const MONTH_YEAR = `(?:${MONTH_NAME}\\.?(?:\\s+de\\s+|\\s*[/.-]\\s*|\\s+)|(0?[1-9]|1[0-2])\\s*[/.-]\\s*)?((?:19|20)\\d{2})`;
+const MONTH_YEAR = `(?:\\b${MONTH_NAME}\\.?(?:\\s+de\\s+|\\s*[/.-]\\s*|\\s+)|(?<!\\d)(0?[1-9]|1[0-2])\\s*[/.-]\\s*)?((?:19|20)\\d{2})`;
 const CURRENT = '(atual|atualmente|presente|present|current|hoje|o momento|now|em andamento)';
 const SEPARATOR = '\\s*(?:-|–|—|a|ate|to|until)\\s*';
 
-const rangePattern = () => new RegExp(`${MONTH_YEAR}${SEPARATOR}(?:${MONTH_YEAR}|${CURRENT})`, 'g');
+// O lookbehind evita ler "13/2020" como "3/2020" (o início não pode colar em dígito ou barra).
+const rangePattern = () => new RegExp(`(?<![\\d/])${MONTH_YEAR}${SEPARATOR}(?:${MONTH_YEAR}|(?:ate\\s+)?${CURRENT})`, 'g');
 
 export interface DateRange {
   /** Índice absoluto de mês (ano * 12 + mês - 1), inclusivo. */
@@ -35,7 +36,7 @@ const NOW = (() => {
   return today.getFullYear() * 12 + today.getMonth();
 })();
 
-/** Encontra todos os períodos de uma linha. O texto deve vir em minúsculas e sem acento. */
+/** Encontra todos os períodos de uma linha. A própria função normaliza (minúsculas, sem acento). */
 export function findDateRanges(line: string): DateRange[] {
   const plain = stripAccents(line.toLowerCase());
   const ranges: DateRange[] = [];

@@ -11,14 +11,28 @@ import { compareTitles, isRecognizable, normalizeTitle } from './titleMatcher';
 const RELEVANT_TITLE_SCORE = 50;
 const MAX_REASONABLE_YEARS = 20;
 
+const RANGE_SEP = '(?:a|ate|-|–|to)';
+const EXPERIENCE_WORD = '(?:experiencia|experience|atuacao|vivencia)';
+
 const YEARS_PATTERNS: RegExp[] = [
-  // "3+ anos de experiência", "5 years of experience"
-  /(\d{1,2})\s*\+?\s*(?:anos?|years?)\s*(?:de|of)?\s*(?:experiencia|experience|atuacao|vivencia)/g,
+  // "3 a 5 anos de experiência": vale o mínimo da faixa
+  new RegExp(`(\\d{1,2})\\s*${RANGE_SEP}\\s*\\d{1,2}\\s*\\+?\\s*(?:anos?|years?)\\s*(?:de|of)?\\s*${EXPERIENCE_WORD}`, 'g'),
+  // "3+ anos de experiência", "5 years of experience" (o fim de uma faixa "3 a 5" não conta)
+  new RegExp(`(?<!\\d\\s*${RANGE_SEP}\\s*)(\\d{1,2})\\s*\\+?\\s*(?:anos?|years?)\\s*(?:de|of)?\\s*${EXPERIENCE_WORD}`, 'g'),
+  // "experiência de 3 anos em vendas", "Experiência: 5 anos", "experience of 2-4 years"
+  new RegExp(`(?:experiencia|experience)\\s*(?::|de|of)\\s*(\\d{1,2})(?:\\s*${RANGE_SEP}\\s*\\d{1,2})?\\s*\\+?\\s*(?:anos?|years?)`, 'g'),
   // "experiência mínima de 3 anos", "experiência de pelo menos 2 anos com..."
   /(?:experiencia|experience|atuacao|vivencia)[^.\n]{0,40}?(?:minim[oa] de|pelo menos|at least|acima de|mais de)\s*(\d{1,2})\s*\+?\s*(?:anos?|years?)/g,
   // "mínimo de 2 anos", "at least 4 years"
   /(?:minimo de|pelo menos|at least)\s*(\d{1,2})\s*(?:anos?|years?)/g,
 ];
+
+/** "Somos uma consultoria com 15 anos de experiência no mercado" descreve a empresa, não a vaga. */
+// "nosso/nossa" sozinho não basta ("Nosso time busca alguém com 3 anos" é exigência); e se a frase
+// diz que busca/exige alguém, os anos são da vaga mesmo com sujeito de empresa.
+const COMPANY_SUBJECT = /\b(somos|atuamos|estamos|nossa empresa|a empresa|fundada|fundado)\b/;
+const SEEKING = /\b(busc|exig|requer|precis|procur|deseja|necessit|contrat)/;
+const COMPANY_AGE_SUFFIX = /^[^.\n]{0,15}?\b(?:no|de|do|na) (?:mercado|historia|existencia)\b/;
 
 /** Anos de experiência exigidos pela vaga (ignora diferenciais e benefícios). */
 export function extractRequiredYears(jobText: string): number | null {
@@ -28,6 +42,9 @@ export function extractRequiredYears(jobText: string): number | null {
     const plain = stripAccents(text.toLowerCase());
     for (const pattern of YEARS_PATTERNS) {
       for (const match of plain.matchAll(pattern)) {
+        const prefix = plain.slice(0, match.index);
+        const suffix = plain.slice(match.index + match[0].length);
+        if ((COMPANY_SUBJECT.test(prefix) && !SEEKING.test(prefix)) || COMPANY_AGE_SUFFIX.test(suffix)) continue;
         const years = Number(match[1]);
         if (years > 0 && years <= MAX_REASONABLE_YEARS) values.push(years);
       }

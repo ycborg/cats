@@ -13,20 +13,34 @@ const LEVEL_PATTERNS: Array<[EducationLevel, RegExp]> = [
   // "master" só com contexto acadêmico, para não confundir com "Scrum Master".
   ['mestrado', /\b(mestrado|mestre|msc|m\.sc|master'?s? (?:degree|of|in|em))\b/],
   ['pos', /\b(pos[- ]graduacao|pos[- ]graduado|especializacao|mba|lato sensu|postgraduate)\b/],
-  ['superior', /\b(superior|graduacao|graduado|bacharel(ado)?|licenciatura|tecnologo|faculdade|universidade|bachelor'?s?|degree|college)\b/],
+  ['superior', /\b(superior|graduacao|graduado|bacharel(ado)?|licenciatura|tecnologo|faculdade|universidade|bachelor'?s?|(?<!technical )degree|college)\b/],
   ['tecnico', /\b(curso tecnico|tecnico em|ensino tecnico|technical degree)\b/],
   ['medio', /\b(ensino medio|segundo grau|high school)\b/],
 ];
+
+/** Linha de vaga só conta como exigência de formação se traz contexto: "superior" sozinho casa com "gestor superior". */
+const FORMATION_CONTEXT =
+  /\b(formacao|graduacao|graduado|ensino|nivel superior|superior (?:completo|completa|cursando|incompleto|em)|bacharel(?:ado)?|licenciatura|tecnologo|degree|pos[- ]graduacao|pos[- ]graduado|especializacao|mba|lato sensu|mestrado|doutorado|curso)\b/;
 
 const IN_PROGRESS = /\b(cursando|em andamento|incompleto|trancado|previsao|conclusao prevista|in progress|expected)\b/;
 const ACCEPTS_IN_PROGRESS = /\b(cursando|em andamento|ou cursando|completo ou cursando|in progress)\b/;
 const COMPLETION_REQUIRED = /\b(completo|completa|concluido|concluida|formado|formada|graduated)\b/;
 
+/**
+ * Siglas ambíguas (CRM de software, CRO de conversão, CRA de gestão) só são registro de conselho
+ * com contexto: "CRM ativo", "registro no CRM", "CRM/UF", "CRM-SP" ou "CRM 12345".
+ */
+function council(acronym: string): RegExp {
+  return new RegExp(
+    `\\b${acronym}\\s*[/-]\\s*[a-z]{2}\\b|\\b${acronym}\\s+(?:ativo|ativa|regular|valido|vigente)\\b|\\b${acronym}\\s*[:.]?\\s*(?:n[o°º.]?\\s*)?\\d{3,}|\\b(?:registro|inscricao|registrado|inscrito)\\b[^.\\n]{0,25}\\b${acronym}\\b`,
+  );
+}
+
 /** Registros profissionais e certificações conhecidas, em várias áreas. */
 const CREDENTIAL_PATTERNS: Array<[string, RegExp]> = [
-  ['OAB', /\boab\b/], ['CRC', /\bcrc\b/], ['CRM', /\bcrm\b(?!\s*(?:de vendas|salesforce|hubspot))/],
+  ['OAB', /\boab\b/], ['CRC', /\bcrc\b/], ['CRM', council('crm')],
   ['COREN', /\bcoren\b/], ['CREA', /\bcrea\b/], ['CAU', /\bcau\b/], ['CRP', /\bcrp\b/], ['CRF', /\bcrf\b/],
-  ['CRN', /\bcrn\b/], ['CREFITO', /\bcrefito\b/], ['CRO', /\bcro\b/], ['CRA', /\bcra\b/], ['CORECON', /\bcorecon\b/],
+  ['CRN', /\bcrn\b/], ['CREFITO', /\bcrefito\b/], ['CRO', council('cro')], ['CRA', council('cra')], ['CORECON', /\bcorecon\b/],
   ['CPA-10', /\bcpa[- ]?10\b/], ['CPA-20', /\bcpa[- ]?20\b/], ['CEA', /\bcea\b/], ['CFP', /\bcfp\b/], ['CFA', /\bcfa\b/],
   ['PMP', /\bpmp\b/], ['CAPM', /\bcapm\b/], ['PSM', /\bpsm\b/], ['CSM', /\bcsm\b/], ['PSPO', /\bpspo\b/],
   ['ITIL', /\bitil\b/], ['COBIT', /\bcobit\b/], ['Six Sigma', /\b(six sigma|green belt|black belt)\b/],
@@ -38,18 +52,21 @@ const CREDENTIAL_PATTERNS: Array<[string, RegExp]> = [
 
 /** Ex.: "Superior completo em Ciência da Computação, Sistemas de Informação ou áreas afins". */
 const FIELD_PATTERN =
-  /(?:superior|graduacao|graduado|formacao|bacharelado|licenciatura|tecnologo|degree|curso tecnico)\s*(?:completo|completa|concluido|concluida)?\s*(?:em|in|na area de)\s+([^.;\n]+)/;
+  /(?:superior|graduacao|graduado|formacao|bacharelado|licenciatura|tecnologo|degree|curso tecnico)\s*(?:completo|completa|concluido|concluida)?\s*(?:em|in|na area de)\s+(?!andamento\b|cursando\b)([^.;\n]+)/;
 
 function detectLevel(text: string): EducationLevel | null {
   return LEVEL_PATTERNS.find(([, pattern]) => pattern.test(text))?.[0] ?? null;
 }
+
+/** Trechos de status que sobram da frase ("em andamento é bem-vinda") e não são área de formação. */
+const NOT_A_FIELD = /^(andamento|cursando|completo|completa|concluido|concluida|bem[- ]vind[oa]s?|desejavel|diferencial)$/;
 
 function splitFields(raw: string): string[] {
   return raw
     .replace(/\b(ou areas afins|areas afins|ou afins|or related fields?|or similar|related)\b.*$/, '')
     .split(/,|\bou\b|\be\b|\bor\b|\band\b|\//)
     .map((field) => field.trim())
-    .filter((field) => field.length >= 3);
+    .filter((field) => field.length >= 3 && !NOT_A_FIELD.test(field));
 }
 
 export function analyzeEducation(jobText: string, resumeText: string, blocks: Block[]): EducationAnalysis {
@@ -62,12 +79,25 @@ export function analyzeEducation(jobText: string, resumeText: string, blocks: Bl
     if (mode === 'nice') continue;
     const plain = stripAccents(text.toLowerCase());
     const level = detectLevel(plain);
-    // Linhas genéricas ("experiência em faculdade X") só contam se falam de formação.
-    if (level && /(formacao|graduacao|superior|ensino|bacharel|licenciatura|tecnologo|degree|pos|mba|mestrado|doutorado|curso)/.test(plain)) {
-      if (!requiredLevel || LEVEL_RANK[level] < LEVEL_RANK[requiredLevel]) requiredLevel = level; // o mínimo aceito
-      requiresCompletion = COMPLETION_REQUIRED.test(plain) && !ACCEPTS_IN_PROGRESS.test(plain);
-      const field = FIELD_PATTERN.exec(plain);
-      if (field?.[1]) requiredFields = splitFields(field[1]);
+    // Linhas genéricas ("experiência em faculdade X", "gestor superior") só contam se falam de formação.
+    if (level && FORMATION_CONTEXT.test(plain)) {
+      const lower = !requiredLevel || LEVEL_RANK[level] < LEVEL_RANK[requiredLevel];
+      const same = level === requiredLevel;
+      // Completude e área vêm só da linha que define o nível mínimo; no mesmo nível acumulam,
+      // e uma linha de nível mais alto ("pós em andamento é bem-vinda") não sobrescreve nada.
+      if (lower || same) {
+        const field = FIELD_PATTERN.exec(plain);
+        const fields = field?.[1] ? splitFields(field[1]) : [];
+        const completion = COMPLETION_REQUIRED.test(plain) && !ACCEPTS_IN_PROGRESS.test(plain);
+        if (lower) {
+          requiredLevel = level;
+          requiresCompletion = completion;
+          requiredFields = fields;
+        } else {
+          requiresCompletion = requiresCompletion || completion;
+          requiredFields = [...new Set([...requiredFields, ...fields])];
+        }
+      }
     }
     for (const [name, pattern] of CREDENTIAL_PATTERNS) if (pattern.test(plain)) requiredCredentials.add(name);
   }
