@@ -1,6 +1,13 @@
 import { HEAD_WORDS } from '../data/cargos';
 import { HARD_SKILLS, SOFT_SKILLS, SYNONYM_GROUPS } from '../data/lexicon';
-import { UPPERCASE_ONLY_TERMS } from '../data/linguagem';
+import {
+  MERGE_PAIRS,
+  NEGATION_CUES,
+  NEGATION_EXCEPTIONS,
+  NEGATION_STOPS,
+  NEGATION_TRIGGERS,
+  UPPERCASE_ONLY_TERMS,
+} from '../data/linguagem';
 import type { Keyword, KeywordCategory, SynonymHint, TypoAlert } from '../types/ats';
 import type { JobSectionMode } from './jobSections';
 import { jobContentLines } from './jobSections';
@@ -149,25 +156,19 @@ function longestLexiconMatch(keys: string[], start: number): { key: string; leng
   return null;
 }
 
+/** Soma uma ocorrência do termo ao candidato (cria se ainda não existir). */
+function register(target: Map<string, Candidate>, key: string, surface: string, mode: JobSectionMode): void {
+  const candidate = target.get(key) ?? { key, surface, frequency: 0, required: false, nice: false, neutral: false };
+  candidate.frequency += 1;
+  if (mode === 'required') candidate.required = true;
+  if (mode === 'nice') candidate.nice = true;
+  if (mode === 'neutral') candidate.neutral = true;
+  target.set(key, candidate);
+}
+
 export function extractKeywords(jobText: string): Keyword[] {
   const segments = segmentJob(jobText);
   const candidates = new Map<string, Candidate>();
-
-  const register = (key: string, surface: string, mode: JobSectionMode): void => {
-    const candidate = candidates.get(key) ?? {
-      key,
-      surface,
-      frequency: 0,
-      required: false,
-      nice: false,
-      neutral: false,
-    };
-    candidate.frequency += 1;
-    if (mode === 'required') candidate.required = true;
-    if (mode === 'nice') candidate.nice = true;
-    if (mode === 'neutral') candidate.neutral = true;
-    candidates.set(key, candidate);
-  };
 
   // 1) Termos do dicionário: sempre contam, mesmo citados uma única vez (maior expressão primeiro).
   const coveredBySegment = segments.map(({ raw, tokens, keys, mode }) => {
@@ -178,7 +179,7 @@ export function extractKeywords(jobText: string): Keyword[] {
         i += 1;
         continue;
       }
-      register(match.key, tokens.slice(i, i + match.length).join(' '), mode);
+      register(candidates, match.key, tokens.slice(i, i + match.length).join(' '), mode);
       covered.fill(true, i, i + match.length);
       i += match.length;
     }
@@ -187,20 +188,12 @@ export function extractKeywords(jobText: string): Keyword[] {
 
   // 2) Expressões genéricas de duas palavras: só se recorrentes na vaga.
   const generic = new Map<string, Candidate>();
-  const registerGeneric = (key: string, surface: string, mode: JobSectionMode) => {
-    const candidate = generic.get(key) ?? { key, surface, frequency: 0, required: false, nice: false, neutral: false };
-    candidate.frequency += 1;
-    if (mode === 'required') candidate.required = true;
-    if (mode === 'nice') candidate.nice = true;
-    if (mode === 'neutral') candidate.neutral = true;
-    generic.set(key, candidate);
-  };
   segments.forEach(({ tokens, keys, mode }, s) => {
     const covered = coveredBySegment[s]!;
     for (let i = 0; i < keys.length - 1; i += 1) {
       if (covered[i] || covered[i + 1]) continue;
       if (isEligibleGeneral(tokens[i]!, keys[i]!) && isEligibleGeneral(tokens[i + 1]!, keys[i + 1]!)) {
-        registerGeneric(`${keys[i]} ${keys[i + 1]}`, `${tokens[i]} ${tokens[i + 1]}`, mode);
+        register(generic, `${keys[i]} ${keys[i + 1]}`, `${tokens[i]} ${tokens[i + 1]}`, mode);
       }
     }
   });
@@ -212,7 +205,7 @@ export function extractKeywords(jobText: string): Keyword[] {
     keys.forEach((key, i) => {
       if (covered[i]) return;
       if (genericBigrams.has(`${key} ${keys[i + 1]}`) || genericBigrams.has(`${keys[i - 1]} ${key}`)) return;
-      if (isEligibleGeneral(tokens[i]!, key)) registerGeneric(key, tokens[i]!, mode);
+      if (isEligibleGeneral(tokens[i]!, key)) register(generic, key, tokens[i]!, mode);
     });
   });
   for (const candidate of generic.values()) {
@@ -251,26 +244,52 @@ interface ResumeIndex {
   canonical: Set<string>;
   /** Chaves literais (sem equivalências): detectam quando o match foi só por sinônimo. */
   literal: Set<string>;
-  /** Como cada chave canônica aparece escrita no currículo. */
+  /** Como cada chave canônica aparece escrita no currículo (a grafia direta vence a do sinônimo). */
   surfaceByKey: Map<string, string>;
+}
+
+/**
+ * Marca as palavras que estão sob negação ("Não tenho experiência com Java"): do gatilho até o fim
+ * do trecho ou até um contraste ("mas", "apenas"). Ênfase ("não só", "not only") não é negação.
+ */
+function negatedTokens(tokens: string[]): boolean[] {
+  const plain = tokens.map((token) => stripAccents(token));
+  const negated = new Array<boolean>(tokens.length).fill(false);
+  for (let i = 0; i < plain.length; i += 1) {
+    if (!NEGATION_CUES.has(plain[i]!) || NEGATION_EXCEPTIONS.has(plain[i + 1] ?? '')) continue;
+    const trigger = plain.slice(i + 1, i + 4).findIndex((token) => NEGATION_TRIGGERS.has(token));
+    if (trigger < 0) continue;
+    let j = i;
+    for (; j < plain.length && (j <= i + 1 + trigger || !NEGATION_STOPS.has(plain[j]!)); j += 1) negated[j] = true;
+    i = j;
+  }
+  return negated;
 }
 
 /** Indexa todas as sequências de 1 a N palavras, para casar expressões do dicionário. */
 function indexText(text: string): ResumeIndex {
   const index: ResumeIndex = { canonical: new Set(), literal: new Set(), surfaceByKey: new Map() };
+  const writtenDirectly = new Set<string>();
   const add = (canonicalKey: string, literalKey: string, surface: string) => {
-    for (const key of new Set([canonicalKey, resolve(canonicalKey)])) {
-      index.canonical.add(key);
-      if (!index.surfaceByKey.has(key)) index.surfaceByKey.set(key, surface);
+    index.canonical.add(canonicalKey);
+    if (!writtenDirectly.has(canonicalKey)) {
+      writtenDirectly.add(canonicalKey);
+      index.surfaceByKey.set(canonicalKey, surface);
     }
+    const mainKey = resolve(canonicalKey);
+    index.canonical.add(mainKey);
+    if (!index.surfaceByKey.has(mainKey)) index.surfaceByKey.set(mainKey, surface);
     index.literal.add(literalKey);
   };
   for (const segment of splitSegments(text)) {
     const tokens = tokenize(segment);
     const keys = tokens.map(canonicalToken);
     const literals = tokens.map(literalToken);
+    const negated = negatedTokens(tokens);
     for (let i = 0; i < keys.length; i += 1) {
       for (let length = 1; length <= MAX_PHRASE && i + length <= keys.length; length += 1) {
+        // Termo citado em negação não é competência da pessoa (nem a expressão que o contém).
+        if (negated[i + length - 1]) break;
         const key = keys.slice(i, i + length).join(' ');
         if (!isWrittenAsTerm(resolve(key), segment)) continue;
         add(
@@ -286,10 +305,28 @@ function indexText(text: string): ResumeIndex {
 
 const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
+const WORD_GAP = '[\\s\\W]{1,3}';
+
+/** Token fundido → formas originais possíveis ("fullstack" ← "full stack"). */
+const SPLIT_FORMS = new Map<string, string[]>();
+for (const [pair, fused] of Object.entries(MERGE_PAIRS)) SPLIT_FORMS.set(fused, [...(SPLIT_FORMS.get(fused) ?? []), pair]);
+
+/** Trecho do texto original que corresponde a um termo normalizado ("apis restful" → "APIs RESTful"). */
+function findWritten(text: string, surface: string): string | null {
+  const tokenPattern = (token: string): string => {
+    const splits = (SPLIT_FORMS.get(token) ?? []).map((pair) => pair.split(' ').map(escapeRegExp).join(WORD_GAP));
+    return splits.length ? `(?:${[...splits, escapeRegExp(token)].join('|')})` : escapeRegExp(token);
+  };
+  const pattern = surface.split(' ').map(tokenPattern).join(WORD_GAP);
+  return new RegExp(pattern, 'iu').exec(text)?.[0] ?? null;
+}
+
+const sameWriting = (a: string, b: string): boolean =>
+  stripAccents(a.toLowerCase()).replace(/\s+/g, ' ').trim() === stripAccents(b.toLowerCase()).replace(/\s+/g, ' ').trim();
+
 /** Recupera a grafia original ("APIs RESTful") de um termo normalizado ("apis restful"). */
 function originalCase(text: string, surface: string): string {
-  const pattern = surface.split(' ').map(escapeRegExp).join('[\\s\\W]{1,3}');
-  return new RegExp(pattern, 'iu').exec(text)?.[0] ?? surface;
+  return findWritten(text, surface) ?? surface;
 }
 
 /** Seções em que um termo aparece "em uso" (não apenas listado). */
@@ -344,6 +381,11 @@ export interface KeywordMatch {
   missing: Keyword[];
   synonymHints: SynonymHint[];
   typoAlerts: TypoAlert[];
+  /**
+   * Como cada termo encontrado está escrito no currículo (chave → grafia original). A folha gerada
+   * usa esta forma, nunca o rótulo da vaga: só o que a pessoa escreveu pode aparecer nela.
+   */
+  resumeForms: Map<string, string>;
   /** 0–100, ou null se a vaga não tiver termos reconhecíveis. */
   score: number | null;
 }
@@ -358,6 +400,7 @@ export function matchKeywords(jobText: string, resumeText: string, blocks: Block
   const found: Keyword[] = [];
   const missing: Keyword[] = [];
   const synonymHints: SynonymHint[] = [];
+  const resumeForms = new Map<string, string>();
 
   for (const keyword of keywords) {
     if (!resumeIndex.canonical.has(keyword.key)) {
@@ -366,15 +409,14 @@ export function matchKeywords(jobText: string, resumeText: string, blocks: Block
     }
     const matched = { ...keyword, inContext: contextIndex.canonical.has(keyword.key) };
     found.push(matched);
+    const surface = resumeIndex.surfaceByKey.get(keyword.key) ?? keyword.label;
+    const resumeForm = findWritten(resumeText, surface) ?? surface;
+    // O rótulo só substitui a grafia da pessoa quando muda apenas caixa e acento ("testes unitários").
+    resumeForms.set(keyword.key, sameWriting(keyword.label, resumeForm) ? keyword.label : resumeForm);
     // Encontrado só por equivalência: sugere escrever também a forma usada na vaga.
     const jobLiteral = tokenize(keyword.jobForm).map(literalToken).join(' ');
     if (jobLiteral && !resumeIndex.literal.has(jobLiteral)) {
-      const surface = resumeIndex.surfaceByKey.get(keyword.key);
-      synonymHints.push({
-        keyword: matched,
-        jobForm: originalCase(jobText, keyword.jobForm),
-        resumeForm: surface ? originalCase(resumeText, surface) : keyword.label,
-      });
+      synonymHints.push({ keyword: matched, jobForm: originalCase(jobText, keyword.jobForm), resumeForm });
     }
   }
 
@@ -407,5 +449,5 @@ export function matchKeywords(jobText: string, resumeText: string, blocks: Block
   );
   const score = totalWeight === 0 ? null : Math.min(100, Math.round((matchedWeight / totalWeight) * 100));
 
-  return { keywords, found, missing, synonymHints, typoAlerts, score };
+  return { keywords, found, missing, synonymHints, typoAlerts, resumeForms, score };
 }

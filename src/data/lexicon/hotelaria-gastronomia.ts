@@ -18,7 +18,8 @@ export default defineArea({
     ['Alimentos e Bebidas', 'A&B'],
     ['CMV', 'Custo de Mercadoria Vendida'],
     ['APPCC', 'Análise de Perigos e Pontos Críticos de Controle', 'HACCP'],
-    ['Boas Práticas de Manipulação', 'Boas Práticas de Manipulação de Alimentos', 'BPF'],
+    // Sem "BPF": Boas Práticas de Fabricação (indústria, farmácia) não é o mesmo que manipulação.
+    ['Boas Práticas de Manipulação', 'Boas Práticas de Manipulação de Alimentos'],
     ['Check-in e Check-out', 'Check-in', 'Check-out'],
   ],
 });

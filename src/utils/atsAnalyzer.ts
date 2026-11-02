@@ -51,7 +51,7 @@ export function analyzeResume(jobText: string, resumeText: string, options: Anal
   const { headerLines, blocks } = parseBlocks(resumeText);
 
   const keywordMatch = matchKeywords(jobText, resumeText, blocks, headerLines);
-  const resume = buildAtsResume(resumeText, keywordMatch.found);
+  const resume = buildAtsResume({ headerLines, blocks }, keywordMatch);
   const jobTitle = extractJobTitle(jobText);
   const experience = analyzeExperience(jobText, { blocks, jobTitle: jobTitle?.normalized ?? null });
   const title = analyzeTitle(jobText, resume.headline, experience.entries);
